@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  server: {
+    port: 9000,
+  },
   build: {
     // Phaser is intentionally a large standalone vendor chunk.
     chunkSizeWarningLimit: 1_500,
