@@ -27,7 +27,7 @@ export const GAME_CONFIG = {
     // Whether clicking a gem visually enlarges it while it is selected.
     enlargeOnSelect: true,
     // Selected-gem size multiplier; values above 1 make the gem larger.
-    scale: 1.2,
+    scale: 1.15,
     // Render depth used to draw the selected gem above neighboring gems.
     depth: 1,
   },
