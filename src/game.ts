@@ -1,17 +1,9 @@
 import Phaser from 'phaser';
-
-const GAME_OPTIONS = {
-  fieldSize: 7,
-  gemColors: 6,
-  gemSize: 100,
-  swapSpeed: 200,
-  fallSpeed: 100,
-  destroySpeed: 200,
-  cascadeDelay: 250,
-} as const;
-
-const GAME_SIZE = GAME_OPTIONS.fieldSize * GAME_OPTIONS.gemSize;
-const GEMS_TEXTURE = 'gems';
+import {
+  BOARD_ORIGIN,
+  GAME_CONFIG,
+  createPhaserGameConfig,
+} from './game_config';
 
 type MatchDirection = 'horizontal' | 'vertical';
 
@@ -45,10 +37,14 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.spritesheet(GEMS_TEXTURE, '/sprites/gems.png', {
-      frameWidth: GAME_OPTIONS.gemSize,
-      frameHeight: GAME_OPTIONS.gemSize,
-    });
+    this.load.spritesheet(
+      GAME_CONFIG.skin.gems.textureKey,
+      GAME_CONFIG.skin.gems.spritesheetUrl,
+      {
+        frameWidth: GAME_CONFIG.skin.gems.frameWidth,
+        frameHeight: GAME_CONFIG.skin.gems.frameHeight,
+      },
+    );
   }
 
   create(): void {
@@ -70,16 +66,17 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private drawField(): void {
-    for (let row = 0; row < GAME_OPTIONS.fieldSize; row += 1) {
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
       this.gameArray[row] = [];
 
-      for (let col = 0; col < GAME_OPTIONS.fieldSize; col += 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         const gemImage = this.add.image(
           this.toPixel(col),
           this.toPixel(row),
-          GEMS_TEXTURE,
+          GAME_CONFIG.skin.gems.textureKey,
           0,
         );
+        this.restoreGemDisplay(gemImage);
         const cell: GemCell = {
           gemColor: 0,
           gemImage,
@@ -89,7 +86,10 @@ export class Match3Scene extends Phaser.Scene {
         this.gameArray[row][col] = cell;
 
         do {
-          cell.gemColor = Phaser.Math.Between(0, GAME_OPTIONS.gemColors - 1);
+          cell.gemColor = Phaser.Math.Between(
+            0,
+            GAME_CONFIG.skin.gems.frameCount - 1,
+          );
           gemImage.setFrame(cell.gemColor);
         } while (this.isMatch(row, col));
       }
@@ -97,7 +97,11 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private toPixel(gridPosition: number): number {
-    return GAME_OPTIONS.gemSize * gridPosition + GAME_OPTIONS.gemSize / 2;
+    return (
+      BOARD_ORIGIN +
+      GAME_CONFIG.gemSize * gridPosition +
+      GAME_CONFIG.gemSize / 2
+    );
   }
 
   private isMatch(row: number, col: number): boolean {
@@ -132,9 +136,9 @@ export class Match3Scene extends Phaser.Scene {
   private gemAt(row: number, col: number): GemCell | null {
     if (
       row < 0 ||
-      row >= GAME_OPTIONS.fieldSize ||
+      row >= GAME_CONFIG.fieldSize.height ||
       col < 0 ||
-      col >= GAME_OPTIONS.fieldSize
+      col >= GAME_CONFIG.fieldSize.width
     ) {
       return null;
     }
@@ -147,15 +151,19 @@ export class Match3Scene extends Phaser.Scene {
       return;
     }
 
-    this.dragging = true;
-
-    const row = Math.floor(pointer.y / GAME_OPTIONS.gemSize);
-    const col = Math.floor(pointer.x / GAME_OPTIONS.gemSize);
+    const row = Math.floor(
+      (pointer.y - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+    );
+    const col = Math.floor(
+      (pointer.x - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+    );
     const pickedGem = this.gemAt(row, col);
 
     if (pickedGem === null) {
       return;
     }
+
+    this.dragging = true;
 
     if (this.selectedGem === null) {
       this.selectGem(pickedGem);
@@ -168,7 +176,7 @@ export class Match3Scene extends Phaser.Scene {
     }
 
     if (this.areNext(pickedGem, this.selectedGem)) {
-      this.selectedGem.gemImage.setScale(1).setDepth(0);
+      this.restoreGemDisplay(this.selectedGem.gemImage);
       this.swapGems(this.selectedGem, pickedGem, true);
       return;
     }
@@ -178,13 +186,30 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private selectGem(gem: GemCell): void {
-    gem.gemImage.setScale(1.2).setDepth(1);
+    const selectionScale = GAME_CONFIG.selection.enlargeOnSelect
+      ? GAME_CONFIG.selection.scale
+      : 1;
+
+    gem.gemImage
+      .setDisplaySize(
+        GAME_CONFIG.gemSize * selectionScale,
+        GAME_CONFIG.gemSize * selectionScale,
+      )
+      .setDepth(GAME_CONFIG.selection.depth);
     this.selectedGem = gem;
   }
 
   private clearSelection(): void {
-    this.selectedGem?.gemImage.setScale(1).setDepth(0);
+    if (this.selectedGem !== null) {
+      this.restoreGemDisplay(this.selectedGem.gemImage);
+    }
     this.selectedGem = null;
+  }
+
+  private restoreGemDisplay(gemImage: Phaser.GameObjects.Image): void {
+    gemImage
+      .setDisplaySize(GAME_CONFIG.gemSize, GAME_CONFIG.gemSize)
+      .setDepth(0);
   }
 
   private startSwipe(pointer: Phaser.Input.Pointer): void {
@@ -198,23 +223,23 @@ export class Match3Scene extends Phaser.Scene {
     let deltaCol = 0;
 
     if (
-      deltaX > GAME_OPTIONS.gemSize / 2 &&
-      Math.abs(deltaY) < GAME_OPTIONS.gemSize / 4
+      deltaX > GAME_CONFIG.gemSize / 2 &&
+      Math.abs(deltaY) < GAME_CONFIG.gemSize / 4
     ) {
       deltaCol = -1;
     } else if (
-      deltaX < -GAME_OPTIONS.gemSize / 2 &&
-      Math.abs(deltaY) < GAME_OPTIONS.gemSize / 4
+      deltaX < -GAME_CONFIG.gemSize / 2 &&
+      Math.abs(deltaY) < GAME_CONFIG.gemSize / 4
     ) {
       deltaCol = 1;
     } else if (
-      deltaY > GAME_OPTIONS.gemSize / 2 &&
-      Math.abs(deltaX) < GAME_OPTIONS.gemSize / 4
+      deltaY > GAME_CONFIG.gemSize / 2 &&
+      Math.abs(deltaX) < GAME_CONFIG.gemSize / 4
     ) {
       deltaRow = -1;
     } else if (
-      deltaY < -GAME_OPTIONS.gemSize / 2 &&
-      Math.abs(deltaX) < GAME_OPTIONS.gemSize / 4
+      deltaY < -GAME_CONFIG.gemSize / 2 &&
+      Math.abs(deltaX) < GAME_CONFIG.gemSize / 4
     ) {
       deltaRow = 1;
     }
@@ -228,7 +253,7 @@ export class Match3Scene extends Phaser.Scene {
     const pickedGem = this.gemAt(selectedRow + deltaRow, selectedCol + deltaCol);
 
     if (pickedGem !== null) {
-      this.selectedGem.gemImage.setScale(1).setDepth(0);
+      this.restoreGemDisplay(this.selectedGem.gemImage);
       this.swapGems(this.selectedGem, pickedGem, true);
       this.dragging = false;
     }
@@ -246,11 +271,15 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private getGemRow(gem: GemCell): number {
-    return Math.floor(gem.gemImage.y / GAME_OPTIONS.gemSize);
+    return Math.floor(
+      (gem.gemImage.y - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+    );
   }
 
   private getGemCol(gem: GemCell): number {
-    return Math.floor(gem.gemImage.x / GAME_OPTIONS.gemSize);
+    return Math.floor(
+      (gem.gemImage.x - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+    );
   }
 
   private areNext(gem1: GemCell, gem2: GemCell): boolean {
@@ -297,7 +326,7 @@ export class Match3Scene extends Phaser.Scene {
       targets: gemImage,
       x: this.toPixel(col),
       y: this.toPixel(row),
-      duration: GAME_OPTIONS.swapSpeed,
+      duration: GAME_CONFIG.swapSpeed,
       onComplete: () => {
         this.swappingGems -= 1;
 
@@ -318,8 +347,8 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private matchInBoard(): boolean {
-    for (let row = 0; row < GAME_OPTIONS.fieldSize; row += 1) {
-      for (let col = 0; col < GAME_OPTIONS.fieldSize; col += 1) {
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         if (this.isMatch(row, col)) {
           return true;
         }
@@ -330,8 +359,9 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleMatches(): void {
-    this.removeMap = Array.from({ length: GAME_OPTIONS.fieldSize }, () =>
-      Array<number>(GAME_OPTIONS.fieldSize).fill(0),
+    this.removeMap = Array.from(
+      { length: GAME_CONFIG.fieldSize.height },
+      () => Array<number>(GAME_CONFIG.fieldSize.width).fill(0),
     );
 
     this.markMatches('horizontal');
@@ -340,10 +370,19 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private markMatches(direction: MatchDirection): void {
-    for (let line = 0; line < GAME_OPTIONS.fieldSize; line += 1) {
+    const lineCount =
+      direction === 'horizontal'
+        ? GAME_CONFIG.fieldSize.height
+        : GAME_CONFIG.fieldSize.width;
+    const lineLength =
+      direction === 'horizontal'
+        ? GAME_CONFIG.fieldSize.width
+        : GAME_CONFIG.fieldSize.height;
+
+    for (let line = 0; line < lineCount; line += 1) {
       let streakStart = 0;
 
-      for (let position = 1; position <= GAME_OPTIONS.fieldSize; position += 1) {
+      for (let position = 1; position <= lineLength; position += 1) {
         const previous = this.gemInLine(direction, line, position - 1);
         const current = this.gemInLine(direction, line, position);
         const streakContinues =
@@ -388,8 +427,8 @@ export class Match3Scene extends Phaser.Scene {
       0,
     );
 
-    for (let row = 0; row < GAME_OPTIONS.fieldSize; row += 1) {
-      for (let col = 0; col < GAME_OPTIONS.fieldSize; col += 1) {
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         if (this.removeMap[row][col] === 0) {
           continue;
         }
@@ -400,7 +439,7 @@ export class Match3Scene extends Phaser.Scene {
         this.tweens.add({
           targets: cell.gemImage,
           alpha: 0.5,
-          duration: GAME_OPTIONS.destroySpeed,
+          duration: GAME_CONFIG.destroySpeed,
           onComplete: () => {
             remaining -= 1;
             cell.gemImage.setVisible(false);
@@ -417,8 +456,8 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private makeGemsFall(): void {
-    for (let row = GAME_OPTIONS.fieldSize - 2; row >= 0; row -= 1) {
-      for (let col = 0; col < GAME_OPTIONS.fieldSize; col += 1) {
+    for (let row = GAME_CONFIG.fieldSize.height - 2; row >= 0; row -= 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         const cell = this.gameArray[row][col];
 
         if (cell.isEmpty) {
@@ -432,8 +471,8 @@ export class Match3Scene extends Phaser.Scene {
 
         this.tweens.add({
           targets: cell.gemImage,
-          y: cell.gemImage.y + fallTiles * GAME_OPTIONS.gemSize,
-          duration: GAME_OPTIONS.fallSpeed * fallTiles,
+          y: cell.gemImage.y + fallTiles * GAME_CONFIG.gemSize,
+          duration: GAME_CONFIG.fallSpeed * fallTiles,
         });
 
         this.gameArray[row + fallTiles][col] = {
@@ -449,7 +488,11 @@ export class Match3Scene extends Phaser.Scene {
   private holesBelow(row: number, col: number): number {
     let result = 0;
 
-    for (let nextRow = row + 1; nextRow < GAME_OPTIONS.fieldSize; nextRow += 1) {
+    for (
+      let nextRow = row + 1;
+      nextRow < GAME_CONFIG.fieldSize.height;
+      nextRow += 1
+    ) {
       if (this.gameArray[nextRow][col].isEmpty) {
         result += 1;
       }
@@ -461,7 +504,7 @@ export class Match3Scene extends Phaser.Scene {
   private replenishField(): void {
     let remaining = 0;
 
-    for (let col = 0; col < GAME_OPTIONS.fieldSize; col += 1) {
+    for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
       const emptySpots = this.holesInColumn(col);
 
       for (let row = 0; row < emptySpots; row += 1) {
@@ -472,7 +515,10 @@ export class Match3Scene extends Phaser.Scene {
 
         remaining += 1;
 
-        const gemColor = Phaser.Math.Between(0, GAME_OPTIONS.gemColors - 1);
+        const gemColor = Phaser.Math.Between(
+          0,
+          GAME_CONFIG.skin.gems.frameCount - 1,
+        );
         this.gameArray[row][col] = {
           gemColor,
           gemImage,
@@ -485,13 +531,16 @@ export class Match3Scene extends Phaser.Scene {
           .setAlpha(1)
           .setPosition(
             this.toPixel(col),
-            GAME_OPTIONS.gemSize / 2 - (emptySpots - row) * GAME_OPTIONS.gemSize,
+            BOARD_ORIGIN +
+              GAME_CONFIG.gemSize / 2 -
+              (emptySpots - row) * GAME_CONFIG.gemSize,
           );
+        this.restoreGemDisplay(gemImage);
 
         this.tweens.add({
           targets: gemImage,
           y: this.toPixel(row),
-          duration: GAME_OPTIONS.fallSpeed * emptySpots,
+          duration: GAME_CONFIG.fallSpeed * emptySpots,
           onComplete: () => {
             remaining -= 1;
 
@@ -500,7 +549,7 @@ export class Match3Scene extends Phaser.Scene {
             }
 
             if (this.matchInBoard()) {
-              this.time.delayedCall(GAME_OPTIONS.cascadeDelay, () => {
+              this.time.delayedCall(GAME_CONFIG.cascadeDelay, () => {
                 this.handleMatches();
               });
             } else {
@@ -516,7 +565,7 @@ export class Match3Scene extends Phaser.Scene {
   private holesInColumn(col: number): number {
     let result = 0;
 
-    for (let row = 0; row < GAME_OPTIONS.fieldSize; row += 1) {
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
       if (this.gameArray[row][col].isEmpty) {
         result += 1;
       }
@@ -526,24 +575,6 @@ export class Match3Scene extends Phaser.Scene {
   }
 }
 
-const gameConfig: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
-  title: 'Match 3',
-  backgroundColor: '#000000',
-  scale: {
-    parent: 'app',
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: GAME_SIZE,
-    height: GAME_SIZE,
-  },
-  render: {
-    antialias: true,
-    roundPixels: false,
-  },
-  scene: Match3Scene,
-};
-
 export function createGame(): Phaser.Game {
-  return new Phaser.Game(gameConfig);
+  return new Phaser.Game(createPhaserGameConfig(Match3Scene));
 }
