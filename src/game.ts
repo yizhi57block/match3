@@ -62,6 +62,9 @@ export class Match3Scene extends Phaser.Scene {
       GAME_CONFIG.backgroundMusic.textureKey,
       GAME_CONFIG.backgroundMusic.audioUrl,
     );
+    for (const soundEffect of Object.values(GAME_CONFIG.soundEffects)) {
+      this.load.audio(soundEffect.textureKey, soundEffect.audioUrl);
+    }
     this.load.image(
       'background-music-playing',
       GAME_CONFIG.backgroundMusic.playingImageUrl,
@@ -267,6 +270,13 @@ export class Match3Scene extends Phaser.Scene {
     );
   }
 
+  private playSoundEffect(
+    soundEffect: keyof typeof GAME_CONFIG.soundEffects,
+  ): void {
+    const { textureKey, volume } = GAME_CONFIG.soundEffects[soundEffect];
+    this.sound.play(textureKey, { volume });
+  }
+
   private drawField(): void {
     for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
       this.gameArray[row] = [];
@@ -373,6 +383,7 @@ export class Match3Scene extends Phaser.Scene {
       return;
     }
 
+    this.playSoundEffect('click');
     this.dragging = true;
 
     if (this.selectedGem === null) {
@@ -423,7 +434,7 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private startSwipe(pointer: Phaser.Input.Pointer): void {
-    if (!this.dragging || this.selectedGem === null) {
+    if (!this.canPick || !this.dragging || this.selectedGem === null) {
       return;
     }
 
@@ -464,8 +475,8 @@ export class Match3Scene extends Phaser.Scene {
 
     if (pickedGem !== null) {
       this.restoreGemDisplay(this.selectedGem.gemImage);
-      this.swapGems(this.selectedGem, pickedGem, true);
       this.dragging = false;
+      this.swapGems(this.selectedGem, pickedGem, true);
     }
   }
 
@@ -558,6 +569,7 @@ export class Match3Scene extends Phaser.Scene {
         }
 
         if (!this.matchInBoard() && swapBack) {
+          this.playSoundEffect('noBreak');
           this.swapGems(gem1, gem2, false);
         } else if (this.matchInBoard()) {
           this.handleMatches();
@@ -588,7 +600,12 @@ export class Match3Scene extends Phaser.Scene {
 
     this.markMatches('horizontal');
     this.markMatches('vertical');
-    this.destroyGems();
+    const matchedGemCount = this.removeMap.reduce(
+      (total, row) => total + row.filter((value) => value > 0).length,
+      0,
+    );
+    this.playSoundEffect(matchedGemCount >= 4 ? 'match4' : 'match3');
+    this.destroyGems(matchedGemCount);
   }
 
   private markMatches(direction: MatchDirection): void {
@@ -643,11 +660,8 @@ export class Match3Scene extends Phaser.Scene {
       : this.gemAt(position, line);
   }
 
-  private destroyGems(): void {
-    let remaining = this.removeMap.reduce(
-      (total, row) => total + row.filter((value) => value > 0).length,
-      0,
-    );
+  private destroyGems(matchedGemCount: number): void {
+    let remaining = matchedGemCount;
 
     for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
       for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {

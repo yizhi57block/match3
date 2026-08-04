@@ -67,6 +67,32 @@ export const GAME_CONFIG = {
     // Distance between the button and the top/right canvas edges.
     buttonMargin: 12,
   },
+  soundEffects: {
+    click: {
+      // Played once when a player selects a gem.
+      textureKey: 'gem-click',
+      audioUrl: '/click.mp3',
+      volume: 0.7,
+    },
+    match3: {
+      // Played for a three-gem removal.
+      textureKey: 'match-3',
+      audioUrl: '/match3.mp3',
+      volume: 0.8,
+    },
+    match4: {
+      // Played when four or more gems are removed in one resolution.
+      textureKey: 'match-4',
+      audioUrl: '/match4.mp3',
+      volume: 0.8,
+    },
+    noBreak: {
+      // Played when an attempted swap does not create a match.
+      textureKey: 'no-break',
+      audioUrl: '/no_break.mp3',
+      volume: 0.7,
+    },
+  },
   skin: {
     // Page, canvas, and exposed board-margin color for the current skin.
     backgroundColor: '#000000',
