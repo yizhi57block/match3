@@ -41,6 +41,26 @@ export const GAME_CONFIG = {
   destroySpeed: 200,
   // Pause, in milliseconds, before resolving the next cascade.
   cascadeDelay: 250,
+  failureConditions: {
+    // Maximum number of swaps that produce no match. Set to 0 or less to
+    // disable this failure condition. A positive value fails the game when
+    // the player reaches that many incorrect swaps.
+    allowedWrongMoves: 0,
+    // Maximum game duration in seconds. Set to 0 or less to disable the
+    // countdown failure condition.
+    countdownSeconds: 0,
+    failImage: {
+      // Phaser texture-cache key and root-relative URL for the failure popup.
+      textureKey: 'game-fail',
+      imageUrl: '/game_fail.webp',
+      // The popup occupies at most this portion of the narrower viewport axis.
+      maxViewportCoverage: 0.8,
+      // Initial scale, relative to the fitted final popup size.
+      initialScale: 0.1,
+      // Duration, in milliseconds, of the popup's grow-in animation.
+      popDuration: 280,
+    },
+  },
   selection: {
     // Whether clicking a gem visually enlarges it while it is selected.
     enlargeOnSelect: true,
@@ -91,6 +111,12 @@ export const GAME_CONFIG = {
       textureKey: 'no-break',
       audioUrl: '/no_break.mp3',
       volume: 0.7,
+    },
+    gameFail: {
+      // Played once when any configured failure condition is reached.
+      textureKey: 'game-fail',
+      audioUrl: '/game_fail.mp3',
+      volume: 0.9,
     },
   },
   skin: {

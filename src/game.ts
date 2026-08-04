@@ -27,6 +27,10 @@ export class Match3Scene extends Phaser.Scene {
   private boardOriginY = 0;
   private gemSize: number = GAME_CONFIG.layout.maxGemSize;
   private pendingBoardLayout = false;
+  private wrongMoveCount = 0;
+  private isGameFailed = false;
+  private gameFailTimer: Phaser.Time.TimerEvent | null = null;
+  private gameFailImage: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super('Match3');
@@ -47,6 +51,10 @@ export class Match3Scene extends Phaser.Scene {
     this.boardOriginY = 0;
     this.gemSize = GAME_CONFIG.layout.maxGemSize;
     this.pendingBoardLayout = false;
+    this.wrongMoveCount = 0;
+    this.isGameFailed = false;
+    this.gameFailTimer = null;
+    this.gameFailImage = null;
   }
 
   preload(): void {
@@ -73,12 +81,17 @@ export class Match3Scene extends Phaser.Scene {
       'background-music-paused',
       GAME_CONFIG.backgroundMusic.pausedImageUrl,
     );
+    this.load.image(
+      GAME_CONFIG.failureConditions.failImage.textureKey,
+      GAME_CONFIG.failureConditions.failImage.imageUrl,
+    );
   }
 
   create(): void {
     this.updateBoardLayout();
     this.drawField();
     this.createBackgroundMusicControls();
+    this.startFailureCountdown();
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.gemSelect, this);
     this.input.on(
@@ -104,6 +117,9 @@ export class Match3Scene extends Phaser.Scene {
       this.backgroundMusic?.destroy();
       this.backgroundMusic = null;
       this.musicStatusButton = null;
+      this.gameFailTimer?.remove();
+      this.gameFailTimer = null;
+      this.gameFailImage = null;
       this.gameArray = [];
       this.poolArray = [];
       this.removeMap = [];
@@ -145,6 +161,12 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleResize(): void {
+    if (this.isGameFailed) {
+      this.updateGameFailImagePosition();
+      this.updateMusicStatusButtonPosition();
+      return;
+    }
+
     if (this.canPick) {
       this.updateBoardLayout(true);
     } else {
@@ -152,6 +174,92 @@ export class Match3Scene extends Phaser.Scene {
       this.pendingBoardLayout = true;
     }
     this.updateMusicStatusButtonPosition();
+  }
+
+  private startFailureCountdown(): void {
+    const { countdownSeconds } = GAME_CONFIG.failureConditions;
+
+    if (countdownSeconds <= 0) {
+      return;
+    }
+
+    this.gameFailTimer = this.time.delayedCall(
+      countdownSeconds * 1000,
+      this.triggerGameFail,
+      [],
+      this,
+    );
+  }
+
+  private registerWrongMove(): boolean {
+    const { allowedWrongMoves } = GAME_CONFIG.failureConditions;
+
+    if (allowedWrongMoves <= 0) {
+      return false;
+    }
+
+    this.wrongMoveCount += 1;
+    if (this.wrongMoveCount < allowedWrongMoves) {
+      return false;
+    }
+
+    this.triggerGameFail();
+    return true;
+  }
+
+  private triggerGameFail(): void {
+    if (this.isGameFailed) {
+      return;
+    }
+
+    this.isGameFailed = true;
+    this.canPick = false;
+    this.dragging = false;
+    this.pendingBoardLayout = false;
+    this.clearSelection();
+    this.gameFailTimer?.remove();
+    this.gameFailTimer = null;
+    this.tweens.killAll();
+    this.playSoundEffect('gameFail');
+    this.showGameFailImage();
+  }
+
+  private showGameFailImage(): void {
+    const { failImage } = GAME_CONFIG.failureConditions;
+    const finalScale = this.resolveGameFailImageScale();
+
+    this.gameFailImage = this.add
+      .image(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        failImage.textureKey,
+      )
+      .setDepth(10)
+      .setScale(finalScale * failImage.initialScale);
+
+    this.tweens.add({
+      targets: this.gameFailImage,
+      scaleX: finalScale,
+      scaleY: finalScale,
+      duration: failImage.popDuration,
+      ease: 'Back.easeOut',
+    });
+  }
+
+  private resolveGameFailImageScale(): number {
+    const { maxViewportCoverage } = GAME_CONFIG.failureConditions.failImage;
+    const source = this.textures
+      .get(GAME_CONFIG.failureConditions.failImage.textureKey)
+      .getSourceImage();
+
+    return Math.min(
+      (this.scale.width * maxViewportCoverage) / source.width,
+      (this.scale.height * maxViewportCoverage) / source.height,
+    );
+  }
+
+  private updateGameFailImagePosition(): void {
+    this.gameFailImage?.setPosition(this.scale.width / 2, this.scale.height / 2);
   }
 
   private updateBoardLayout(moveGems = false): void {
@@ -485,6 +593,10 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private finishBoardInteraction(): void {
+    if (this.isGameFailed) {
+      return;
+    }
+
     this.canPick = true;
     this.clearSelection();
 
@@ -569,6 +681,10 @@ export class Match3Scene extends Phaser.Scene {
         }
 
         if (!this.matchInBoard() && swapBack) {
+          if (this.registerWrongMove()) {
+            return;
+          }
+
           this.playSoundEffect('noBreak');
           this.swapGems(gem1, gem2, false);
         } else if (this.matchInBoard()) {
@@ -593,6 +709,10 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleMatches(): void {
+    if (this.isGameFailed) {
+      return;
+    }
+
     this.removeMap = Array.from(
       { length: GAME_CONFIG.fieldSize.height },
       () => Array<number>(GAME_CONFIG.fieldSize.width).fill(0),
