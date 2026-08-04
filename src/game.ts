@@ -1,7 +1,5 @@
 import Phaser from 'phaser';
 import {
-  BOARD_HEIGHT,
-  BOARD_WIDTH,
   GAME_CONFIG,
   createPhaserGameConfig,
 } from './game_config';
@@ -27,6 +25,8 @@ export class Match3Scene extends Phaser.Scene {
   private hasHandledMusicAutoStart = false;
   private boardOriginX = 0;
   private boardOriginY = 0;
+  private gemSize: number = GAME_CONFIG.layout.maxGemSize;
+  private pendingBoardLayout = false;
 
   constructor() {
     super('Match3');
@@ -45,6 +45,8 @@ export class Match3Scene extends Phaser.Scene {
     this.hasHandledMusicAutoStart = false;
     this.boardOriginX = 0;
     this.boardOriginY = 0;
+    this.gemSize = GAME_CONFIG.layout.maxGemSize;
+    this.pendingBoardLayout = false;
   }
 
   preload(): void {
@@ -140,38 +142,70 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleResize(): void {
-    this.updateBoardLayout(true);
+    if (this.canPick) {
+      this.updateBoardLayout(true);
+    } else {
+      // Do not move targets while a swap or cascade tween is resolving.
+      this.pendingBoardLayout = true;
+    }
     this.updateMusicStatusButtonPosition();
   }
 
   private updateBoardLayout(moveGems = false): void {
-    const previousOriginX = this.boardOriginX;
-    const previousOriginY = this.boardOriginY;
     const { position } = GAME_CONFIG.board;
+    this.gemSize = this.resolveGemSize();
 
     this.boardOriginX = this.resolveBoardPosition(
       position.x,
-      BOARD_WIDTH,
+      GAME_CONFIG.fieldSize.width * this.gemSize,
       this.scale.width,
     );
     this.boardOriginY = this.resolveBoardPosition(
       position.y,
-      BOARD_HEIGHT,
+      GAME_CONFIG.fieldSize.height * this.gemSize,
       this.scale.height,
     );
 
-    if (!moveGems) {
+    if (!moveGems || this.gameArray.length === 0) {
       return;
     }
 
-    const offsetX = this.boardOriginX - previousOriginX;
-    const offsetY = this.boardOriginY - previousOriginY;
-    for (const row of this.gameArray) {
-      for (const cell of row) {
-        cell.gemImage.x += offsetX;
-        cell.gemImage.y += offsetY;
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height; row += 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
+        const cell = this.gameArray[row][col];
+        cell.gemImage.setPosition(this.toPixel(col), this.toPixelY(row));
+        this.restoreGemDisplay(cell.gemImage);
       }
     }
+
+    if (this.selectedGem !== null) {
+      this.selectGem(this.selectedGem);
+    }
+  }
+
+  private resolveGemSize(): number {
+    const { fieldSize, layout, selection } = GAME_CONFIG;
+    const selectionOverflow = selection.enlargeOnSelect
+      ? Math.max(selection.scale - 1, 0)
+      : 0;
+    const availableWidth = Math.max(
+      0,
+      this.scale.width - layout.horizontalPadding * 2,
+    );
+    const availableHeight = Math.max(
+      0,
+      this.scale.height - layout.verticalPadding * 2,
+    );
+    const widthLimitedSize =
+      availableWidth / (fieldSize.width + selectionOverflow);
+    const heightLimitedSize =
+      availableHeight / (fieldSize.height + selectionOverflow);
+
+    return Phaser.Math.Clamp(
+      Math.min(widthLimitedSize, heightLimitedSize),
+      layout.minGemSize,
+      layout.maxGemSize,
+    );
   }
 
   private resolveBoardPosition(
@@ -267,16 +301,16 @@ export class Match3Scene extends Phaser.Scene {
   private toPixel(gridPosition: number): number {
     return (
       this.boardOriginX +
-      GAME_CONFIG.gemSize * gridPosition +
-      GAME_CONFIG.gemSize / 2
+      this.gemSize * gridPosition +
+      this.gemSize / 2
     );
   }
 
   private toPixelY(gridPosition: number): number {
     return (
       this.boardOriginY +
-      GAME_CONFIG.gemSize * gridPosition +
-      GAME_CONFIG.gemSize / 2
+      this.gemSize * gridPosition +
+      this.gemSize / 2
     );
   }
 
@@ -328,10 +362,10 @@ export class Match3Scene extends Phaser.Scene {
     }
 
     const row = Math.floor(
-      (pointer.y - this.boardOriginY) / GAME_CONFIG.gemSize,
+      (pointer.y - this.boardOriginY) / this.gemSize,
     );
     const col = Math.floor(
-      (pointer.x - this.boardOriginX) / GAME_CONFIG.gemSize,
+      (pointer.x - this.boardOriginX) / this.gemSize,
     );
     const pickedGem = this.gemAt(row, col);
 
@@ -368,8 +402,8 @@ export class Match3Scene extends Phaser.Scene {
 
     gem.gemImage
       .setDisplaySize(
-        GAME_CONFIG.gemSize * selectionScale,
-        GAME_CONFIG.gemSize * selectionScale,
+        this.gemSize * selectionScale,
+        this.gemSize * selectionScale,
       )
       .setDepth(GAME_CONFIG.selection.depth);
     this.selectedGem = gem;
@@ -384,7 +418,7 @@ export class Match3Scene extends Phaser.Scene {
 
   private restoreGemDisplay(gemImage: Phaser.GameObjects.Image): void {
     gemImage
-      .setDisplaySize(GAME_CONFIG.gemSize, GAME_CONFIG.gemSize)
+      .setDisplaySize(this.gemSize, this.gemSize)
       .setDepth(0);
   }
 
@@ -399,23 +433,23 @@ export class Match3Scene extends Phaser.Scene {
     let deltaCol = 0;
 
     if (
-      deltaX > GAME_CONFIG.gemSize / 2 &&
-      Math.abs(deltaY) < GAME_CONFIG.gemSize / 4
+      deltaX > this.gemSize * 0.35 &&
+      Math.abs(deltaY) < this.gemSize * 0.45
     ) {
       deltaCol = -1;
     } else if (
-      deltaX < -GAME_CONFIG.gemSize / 2 &&
-      Math.abs(deltaY) < GAME_CONFIG.gemSize / 4
+      deltaX < -this.gemSize * 0.35 &&
+      Math.abs(deltaY) < this.gemSize * 0.45
     ) {
       deltaCol = 1;
     } else if (
-      deltaY > GAME_CONFIG.gemSize / 2 &&
-      Math.abs(deltaX) < GAME_CONFIG.gemSize / 4
+      deltaY > this.gemSize * 0.35 &&
+      Math.abs(deltaX) < this.gemSize * 0.45
     ) {
       deltaRow = -1;
     } else if (
-      deltaY < -GAME_CONFIG.gemSize / 2 &&
-      Math.abs(deltaX) < GAME_CONFIG.gemSize / 4
+      deltaY < -this.gemSize * 0.35 &&
+      Math.abs(deltaX) < this.gemSize * 0.45
     ) {
       deltaRow = 1;
     }
@@ -439,6 +473,19 @@ export class Match3Scene extends Phaser.Scene {
     this.dragging = false;
   }
 
+  private finishBoardInteraction(): void {
+    this.canPick = true;
+    this.clearSelection();
+
+    if (!this.pendingBoardLayout) {
+      return;
+    }
+
+    this.pendingBoardLayout = false;
+    this.updateBoardLayout(true);
+    this.updateMusicStatusButtonPosition();
+  }
+
   private areTheSame(gem1: GemCell, gem2: GemCell): boolean {
     return (
       this.getGemRow(gem1) === this.getGemRow(gem2) &&
@@ -448,13 +495,13 @@ export class Match3Scene extends Phaser.Scene {
 
   private getGemRow(gem: GemCell): number {
     return Math.floor(
-      (gem.gemImage.y - this.boardOriginY) / GAME_CONFIG.gemSize,
+      (gem.gemImage.y - this.boardOriginY) / this.gemSize,
     );
   }
 
   private getGemCol(gem: GemCell): number {
     return Math.floor(
-      (gem.gemImage.x - this.boardOriginX) / GAME_CONFIG.gemSize,
+      (gem.gemImage.x - this.boardOriginX) / this.gemSize,
     );
   }
 
@@ -515,8 +562,7 @@ export class Match3Scene extends Phaser.Scene {
         } else if (this.matchInBoard()) {
           this.handleMatches();
         } else {
-          this.canPick = true;
-          this.clearSelection();
+          this.finishBoardInteraction();
         }
       },
     });
@@ -647,7 +693,7 @@ export class Match3Scene extends Phaser.Scene {
 
         this.tweens.add({
           targets: cell.gemImage,
-          y: cell.gemImage.y + fallTiles * GAME_CONFIG.gemSize,
+          y: cell.gemImage.y + fallTiles * this.gemSize,
           duration: GAME_CONFIG.fallSpeed * fallTiles,
         });
 
@@ -708,8 +754,8 @@ export class Match3Scene extends Phaser.Scene {
           .setPosition(
             this.toPixel(col),
             this.boardOriginY +
-              GAME_CONFIG.gemSize / 2 -
-              (emptySpots - row) * GAME_CONFIG.gemSize,
+              this.gemSize / 2 -
+              (emptySpots - row) * this.gemSize,
           );
         this.restoreGemDisplay(gemImage);
 
@@ -729,8 +775,7 @@ export class Match3Scene extends Phaser.Scene {
                 this.handleMatches();
               });
             } else {
-              this.canPick = true;
-              this.clearSelection();
+              this.finishBoardInteraction();
             }
           },
         });

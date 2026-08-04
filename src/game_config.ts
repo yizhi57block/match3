@@ -23,8 +23,16 @@ export const GAME_CONFIG = {
       y: 'center' as BoardPosition,
     },
   },
-  // Width and height, in game pixels, occupied by one board cell.
-  gemSize: 100,
+  layout: {
+    // Largest visual size of a board cell. Desktop layouts retain this size.
+    maxGemSize: 100,
+    // Smallest comfortable touch target. This still fits a 6-column board on
+    // a 320px-wide device when selection overflow and gutters are included.
+    minGemSize: 48,
+    // Space left around the enlarged boundary gems, in logical pixels.
+    horizontalPadding: 12,
+    verticalPadding: 24,
+  },
   // Duration, in milliseconds, of an adjacent-gem swap.
   swapSpeed: 200,
   // Duration, in milliseconds, for a gem to fall by one board cell.
@@ -86,20 +94,6 @@ export const GAME_CONFIG = {
     roundPixels: false,
   },
 } as const;
-
-// Extra space needed on each edge to keep an enlarged boundary gem visible.
-export const BOARD_PADDING = GAME_CONFIG.selection.enlargeOnSelect
-  ? Math.ceil(
-      (GAME_CONFIG.gemSize * Math.max(GAME_CONFIG.selection.scale - 1, 0)) / 2,
-    )
-  : 0;
-
-// Board dimensions, including selection-safe edge margins.
-export const BOARD_WIDTH =
-  GAME_CONFIG.fieldSize.width * GAME_CONFIG.gemSize + BOARD_PADDING * 2;
-
-export const BOARD_HEIGHT =
-  GAME_CONFIG.fieldSize.height * GAME_CONFIG.gemSize + BOARD_PADDING * 2;
 
 /** Creates the Phaser config after the scene class is available. */
 export function createPhaserGameConfig(
