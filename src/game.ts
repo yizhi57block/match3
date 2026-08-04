@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
-  BOARD_ORIGIN,
+  BOARD_HEIGHT,
+  BOARD_WIDTH,
   GAME_CONFIG,
   createPhaserGameConfig,
 } from './game_config';
@@ -21,6 +22,11 @@ export class Match3Scene extends Phaser.Scene {
   private canPick = true;
   private dragging = false;
   private swappingGems = 0;
+  private backgroundMusic: Phaser.Sound.BaseSound | null = null;
+  private musicStatusButton: Phaser.GameObjects.Image | null = null;
+  private hasHandledMusicAutoStart = false;
+  private boardOriginX = 0;
+  private boardOriginY = 0;
 
   constructor() {
     super('Match3');
@@ -34,6 +40,11 @@ export class Match3Scene extends Phaser.Scene {
     this.canPick = true;
     this.dragging = false;
     this.swappingGems = 0;
+    this.backgroundMusic = null;
+    this.musicStatusButton = null;
+    this.hasHandledMusicAutoStart = false;
+    this.boardOriginX = 0;
+    this.boardOriginY = 0;
   }
 
   preload(): void {
@@ -45,24 +56,181 @@ export class Match3Scene extends Phaser.Scene {
         frameHeight: GAME_CONFIG.skin.gems.frameHeight,
       },
     );
+    this.load.audio(
+      GAME_CONFIG.backgroundMusic.textureKey,
+      GAME_CONFIG.backgroundMusic.audioUrl,
+    );
+    this.load.image(
+      'background-music-playing',
+      GAME_CONFIG.backgroundMusic.playingImageUrl,
+    );
+    this.load.image(
+      'background-music-paused',
+      GAME_CONFIG.backgroundMusic.pausedImageUrl,
+    );
   }
 
   create(): void {
+    this.updateBoardLayout();
     this.drawField();
+    this.createBackgroundMusicControls();
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.gemSelect, this);
+    this.input.on(
+      Phaser.Input.Events.POINTER_DOWN,
+      this.startBackgroundMusicOnFirstPointerDown,
+      this,
+    );
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.startSwipe, this);
     this.input.on(Phaser.Input.Events.POINTER_UP, this.stopSwipe, this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off(Phaser.Input.Events.POINTER_DOWN, this.gemSelect, this);
+      this.input.off(
+        Phaser.Input.Events.POINTER_DOWN,
+        this.startBackgroundMusicOnFirstPointerDown,
+        this,
+      );
       this.input.off(Phaser.Input.Events.POINTER_MOVE, this.startSwipe, this);
       this.input.off(Phaser.Input.Events.POINTER_UP, this.stopSwipe, this);
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+      this.backgroundMusic?.stop();
+      this.backgroundMusic?.destroy();
+      this.backgroundMusic = null;
+      this.musicStatusButton = null;
       this.gameArray = [];
       this.poolArray = [];
       this.removeMap = [];
       this.selectedGem = null;
     });
+  }
+
+  private createBackgroundMusicControls(): void {
+    this.backgroundMusic = this.sound.add(
+      GAME_CONFIG.backgroundMusic.textureKey,
+      {
+        loop: true,
+        volume: GAME_CONFIG.backgroundMusic.volume,
+      },
+    );
+
+    const { buttonMargin, buttonSize } = GAME_CONFIG.backgroundMusic;
+    this.musicStatusButton = this.add
+      .image(
+        this.scale.width - buttonMargin - buttonSize / 2,
+        buttonMargin + buttonSize / 2,
+        'background-music-paused',
+      )
+      .setDisplaySize(buttonSize, buttonSize)
+      .setDepth(2)
+      .setInteractive({ useHandCursor: true });
+    this.musicStatusButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.toggleBackgroundMusic();
+      },
+    );
+  }
+
+  private handleResize(): void {
+    this.updateBoardLayout(true);
+    this.updateMusicStatusButtonPosition();
+  }
+
+  private updateBoardLayout(moveGems = false): void {
+    const previousOriginX = this.boardOriginX;
+    const previousOriginY = this.boardOriginY;
+    const { position } = GAME_CONFIG.board;
+
+    this.boardOriginX = this.resolveBoardPosition(
+      position.x,
+      BOARD_WIDTH,
+      this.scale.width,
+    );
+    this.boardOriginY = this.resolveBoardPosition(
+      position.y,
+      BOARD_HEIGHT,
+      this.scale.height,
+    );
+
+    if (!moveGems) {
+      return;
+    }
+
+    const offsetX = this.boardOriginX - previousOriginX;
+    const offsetY = this.boardOriginY - previousOriginY;
+    for (const row of this.gameArray) {
+      for (const cell of row) {
+        cell.gemImage.x += offsetX;
+        cell.gemImage.y += offsetY;
+      }
+    }
+  }
+
+  private resolveBoardPosition(
+    position: number | 'center',
+    boardSize: number,
+    canvasSize: number,
+  ): number {
+    return position === 'center' ? (canvasSize - boardSize) / 2 : position;
+  }
+
+  private updateMusicStatusButtonPosition(): void {
+    const { buttonMargin, buttonSize } = GAME_CONFIG.backgroundMusic;
+    this.musicStatusButton?.setPosition(
+      this.scale.width - buttonMargin - buttonSize / 2,
+      buttonMargin + buttonSize / 2,
+    );
+  }
+
+  private startBackgroundMusicOnFirstPointerDown(): void {
+    if (
+      !GAME_CONFIG.backgroundMusic.startOnFirstPointerDown ||
+      this.hasHandledMusicAutoStart
+    ) {
+      return;
+    }
+
+    this.hasHandledMusicAutoStart = true;
+    this.playBackgroundMusic();
+  }
+
+  private toggleBackgroundMusic(): void {
+    if (this.backgroundMusic?.isPlaying) {
+      this.backgroundMusic.pause();
+      this.updateMusicStatusButton();
+      return;
+    }
+
+    this.playBackgroundMusic();
+  }
+
+  private playBackgroundMusic(): void {
+    if (this.backgroundMusic === null || this.backgroundMusic.isPlaying) {
+      return;
+    }
+
+    if (this.backgroundMusic.isPaused) {
+      this.backgroundMusic.resume();
+    } else {
+      this.backgroundMusic.play();
+    }
+    this.updateMusicStatusButton();
+  }
+
+  private updateMusicStatusButton(): void {
+    this.musicStatusButton?.setTexture(
+      this.backgroundMusic?.isPlaying
+        ? 'background-music-playing'
+        : 'background-music-paused',
+    );
   }
 
   private drawField(): void {
@@ -72,7 +240,7 @@ export class Match3Scene extends Phaser.Scene {
       for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         const gemImage = this.add.image(
           this.toPixel(col),
-          this.toPixel(row),
+          this.toPixelY(row),
           GAME_CONFIG.skin.gems.textureKey,
           0,
         );
@@ -98,7 +266,15 @@ export class Match3Scene extends Phaser.Scene {
 
   private toPixel(gridPosition: number): number {
     return (
-      BOARD_ORIGIN +
+      this.boardOriginX +
+      GAME_CONFIG.gemSize * gridPosition +
+      GAME_CONFIG.gemSize / 2
+    );
+  }
+
+  private toPixelY(gridPosition: number): number {
+    return (
+      this.boardOriginY +
       GAME_CONFIG.gemSize * gridPosition +
       GAME_CONFIG.gemSize / 2
     );
@@ -152,10 +328,10 @@ export class Match3Scene extends Phaser.Scene {
     }
 
     const row = Math.floor(
-      (pointer.y - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+      (pointer.y - this.boardOriginY) / GAME_CONFIG.gemSize,
     );
     const col = Math.floor(
-      (pointer.x - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+      (pointer.x - this.boardOriginX) / GAME_CONFIG.gemSize,
     );
     const pickedGem = this.gemAt(row, col);
 
@@ -272,13 +448,13 @@ export class Match3Scene extends Phaser.Scene {
 
   private getGemRow(gem: GemCell): number {
     return Math.floor(
-      (gem.gemImage.y - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+      (gem.gemImage.y - this.boardOriginY) / GAME_CONFIG.gemSize,
     );
   }
 
   private getGemCol(gem: GemCell): number {
     return Math.floor(
-      (gem.gemImage.x - BOARD_ORIGIN) / GAME_CONFIG.gemSize,
+      (gem.gemImage.x - this.boardOriginX) / GAME_CONFIG.gemSize,
     );
   }
 
@@ -325,7 +501,7 @@ export class Match3Scene extends Phaser.Scene {
     this.tweens.add({
       targets: gemImage,
       x: this.toPixel(col),
-      y: this.toPixel(row),
+      y: this.toPixelY(row),
       duration: GAME_CONFIG.swapSpeed,
       onComplete: () => {
         this.swappingGems -= 1;
@@ -531,7 +707,7 @@ export class Match3Scene extends Phaser.Scene {
           .setAlpha(1)
           .setPosition(
             this.toPixel(col),
-            BOARD_ORIGIN +
+            this.boardOriginY +
               GAME_CONFIG.gemSize / 2 -
               (emptySpots - row) * GAME_CONFIG.gemSize,
           );
@@ -539,7 +715,7 @@ export class Match3Scene extends Phaser.Scene {
 
         this.tweens.add({
           targets: gemImage,
-          y: this.toPixel(row),
+          y: this.toPixelY(row),
           duration: GAME_CONFIG.fallSpeed * emptySpots,
           onComplete: () => {
             remaining -= 1;

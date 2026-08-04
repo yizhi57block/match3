@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+type BoardPosition = number | 'center';
+
 /**
  * Match-3 gameplay, presentation, and skin configuration.
  *
@@ -12,6 +14,14 @@ export const GAME_CONFIG = {
     width: 6,
     // Number of gem rows (the vertical board length).
     height: 8,
+  },
+  board: {
+    // Board position inside the full-screen canvas. Use a pixel coordinate or
+    // 'center' on either axis; the default keeps the board centered.
+    position: {
+      x: 'center' as BoardPosition,
+      y: 'center' as BoardPosition,
+    },
   },
   // Width and height, in game pixels, occupied by one board cell.
   gemSize: 100,
@@ -30,6 +40,24 @@ export const GAME_CONFIG = {
     scale: 1.15,
     // Render depth used to draw the selected gem above neighboring gems.
     depth: 1,
+  },
+  backgroundMusic: {
+    // Phaser audio-cache key used by the background music instance.
+    textureKey: 'background-music',
+    // Root-relative URL of the looping background music track.
+    audioUrl: '/bg_music.mp3',
+    // Root-relative image shown while background music is playing.
+    playingImageUrl: '/video_on.png',
+    // Root-relative image shown while background music is paused or stopped.
+    pausedImageUrl: '/video_off.png',
+    // Start the music from the first click or tap anywhere in the game.
+    startOnFirstPointerDown: true,
+    // Per-track volume, from 0 (silent) through 1 (full volume).
+    volume: 0.4,
+    // Logical display size of the music-status button in game pixels.
+    buttonSize: 48,
+    // Distance between the button and the top/right canvas edges.
+    buttonMargin: 12,
   },
   skin: {
     // Page, canvas, and exposed board-margin color for the current skin.
@@ -66,15 +94,11 @@ export const BOARD_PADDING = GAME_CONFIG.selection.enlargeOnSelect
     )
   : 0;
 
-// Pixel coordinate at which the board begins inside the padded game canvas.
-export const BOARD_ORIGIN = BOARD_PADDING;
-
-// Total logical canvas width, including the selection-safe edge margins.
-export const GAME_WIDTH =
+// Board dimensions, including selection-safe edge margins.
+export const BOARD_WIDTH =
   GAME_CONFIG.fieldSize.width * GAME_CONFIG.gemSize + BOARD_PADDING * 2;
 
-// Total logical canvas height, including the selection-safe edge margins.
-export const GAME_HEIGHT =
+export const BOARD_HEIGHT =
   GAME_CONFIG.fieldSize.height * GAME_CONFIG.gemSize + BOARD_PADDING * 2;
 
 /** Creates the Phaser config after the scene class is available. */
@@ -86,19 +110,15 @@ export function createPhaserGameConfig(
     type: Phaser.AUTO,
     // Use the configured game title in Phaser's startup banner.
     title: GAME_CONFIG.phaser.title,
-    // Fill the canvas and the selection-safe margin with the skin background.
+    // Fill the full browser viewport with the skin background.
     backgroundColor: GAME_CONFIG.skin.backgroundColor,
     scale: {
       // Mount the canvas in the configured browser element.
       parent: GAME_CONFIG.phaser.parent,
-      // Preserve the configured board aspect ratio within the browser viewport.
-      mode: Phaser.Scale.FIT,
-      // Center the fitted canvas horizontally and vertically.
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      // Use the rectangular board width plus its selection-safe margins.
-      width: GAME_WIDTH,
-      // Use the rectangular board height plus its selection-safe margins.
-      height: GAME_HEIGHT,
+      // Resize the logical canvas with its full-screen parent.
+      mode: Phaser.Scale.RESIZE,
+      width: '100%',
+      height: '100%',
     },
     render: {
       // Apply the configured smoothing mode when textures are scaled.
