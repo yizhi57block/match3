@@ -5,15 +5,26 @@ import {
 } from './game_config';
 
 type MatchDirection = 'horizontal' | 'vertical';
+type GameOutcome = 'playing' | 'won' | 'failed';
 
 interface GemCell {
+  kind: 'gem';
   gemColor: number;
   gemImage: Phaser.GameObjects.Image;
   isEmpty: boolean;
 }
 
+interface KeyCell {
+  kind: 'key';
+  keyId: string;
+  gemImage: Phaser.GameObjects.Image;
+  isEmpty: boolean;
+}
+
+type BoardCell = GemCell | KeyCell;
+
 export class Match3Scene extends Phaser.Scene {
-  private gameArray: GemCell[][] = [];
+  private gameArray: BoardCell[][] = [];
   private poolArray: Phaser.GameObjects.Image[] = [];
   private removeMap: number[][] = [];
   private selectedGem: GemCell | null = null;
@@ -28,9 +39,10 @@ export class Match3Scene extends Phaser.Scene {
   private gemSize: number = GAME_CONFIG.layout.maxGemSize;
   private pendingBoardLayout = false;
   private wrongMoveCount = 0;
-  private isGameFailed = false;
+  private gameOutcome: GameOutcome = 'playing';
+  private collectedKeyCount = 0;
   private gameFailTimer: Phaser.Time.TimerEvent | null = null;
-  private gameFailImage: Phaser.GameObjects.Image | null = null;
+  private gameOutcomeImage: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super('Match3');
@@ -52,9 +64,10 @@ export class Match3Scene extends Phaser.Scene {
     this.gemSize = GAME_CONFIG.layout.maxGemSize;
     this.pendingBoardLayout = false;
     this.wrongMoveCount = 0;
-    this.isGameFailed = false;
+    this.gameOutcome = 'playing';
+    this.collectedKeyCount = 0;
     this.gameFailTimer = null;
-    this.gameFailImage = null;
+    this.gameOutcomeImage = null;
   }
 
   preload(): void {
@@ -85,6 +98,13 @@ export class Match3Scene extends Phaser.Scene {
       GAME_CONFIG.failureConditions.failImage.textureKey,
       GAME_CONFIG.failureConditions.failImage.imageUrl,
     );
+    this.load.image(
+      GAME_CONFIG.victoryCondition.successImage.textureKey,
+      GAME_CONFIG.victoryCondition.successImage.imageUrl,
+    );
+    for (const keyAsset of GAME_CONFIG.victoryCondition.keys) {
+      this.load.image(keyAsset.textureKey, keyAsset.imageUrl);
+    }
   }
 
   create(): void {
@@ -119,7 +139,7 @@ export class Match3Scene extends Phaser.Scene {
       this.musicStatusButton = null;
       this.gameFailTimer?.remove();
       this.gameFailTimer = null;
-      this.gameFailImage = null;
+      this.gameOutcomeImage = null;
       this.gameArray = [];
       this.poolArray = [];
       this.removeMap = [];
@@ -161,8 +181,8 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleResize(): void {
-    if (this.isGameFailed) {
-      this.updateGameFailImagePosition();
+    if (this.gameOutcome !== 'playing') {
+      this.updateGameOutcomeImagePosition();
       this.updateMusicStatusButtonPosition();
       return;
     }
@@ -208,11 +228,31 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private triggerGameFail(): void {
-    if (this.isGameFailed) {
+    if (this.gameOutcome !== 'playing') {
       return;
     }
 
-    this.isGameFailed = true;
+    this.gameOutcome = 'failed';
+    this.finishGame();
+    this.playSoundEffect('gameFail');
+    this.showGameOutcomeImage(
+      GAME_CONFIG.failureConditions.failImage.textureKey,
+    );
+  }
+
+  private triggerGameSuccess(): void {
+    if (this.gameOutcome !== 'playing') {
+      return;
+    }
+
+    this.gameOutcome = 'won';
+    this.finishGame();
+    this.showGameOutcomeImage(
+      GAME_CONFIG.victoryCondition.successImage.textureKey,
+    );
+  }
+
+  private finishGame(): void {
     this.canPick = false;
     this.dragging = false;
     this.pendingBoardLayout = false;
@@ -220,37 +260,33 @@ export class Match3Scene extends Phaser.Scene {
     this.gameFailTimer?.remove();
     this.gameFailTimer = null;
     this.tweens.killAll();
-    this.playSoundEffect('gameFail');
-    this.showGameFailImage();
   }
 
-  private showGameFailImage(): void {
-    const { failImage } = GAME_CONFIG.failureConditions;
-    const finalScale = this.resolveGameFailImageScale();
+  private showGameOutcomeImage(textureKey: string): void {
+    const { initialScale, popDuration } = GAME_CONFIG.outcomePopup;
+    const finalScale = this.resolveGameOutcomeImageScale(textureKey);
 
-    this.gameFailImage = this.add
+    this.gameOutcomeImage = this.add
       .image(
         this.scale.width / 2,
         this.scale.height / 2,
-        failImage.textureKey,
+        textureKey,
       )
       .setDepth(10)
-      .setScale(finalScale * failImage.initialScale);
+      .setScale(finalScale * initialScale);
 
     this.tweens.add({
-      targets: this.gameFailImage,
+      targets: this.gameOutcomeImage,
       scaleX: finalScale,
       scaleY: finalScale,
-      duration: failImage.popDuration,
+      duration: popDuration,
       ease: 'Back.easeOut',
     });
   }
 
-  private resolveGameFailImageScale(): number {
-    const { maxViewportCoverage } = GAME_CONFIG.failureConditions.failImage;
-    const source = this.textures
-      .get(GAME_CONFIG.failureConditions.failImage.textureKey)
-      .getSourceImage();
+  private resolveGameOutcomeImageScale(textureKey: string): number {
+    const { maxViewportCoverage } = GAME_CONFIG.outcomePopup;
+    const source = this.textures.get(textureKey).getSourceImage();
 
     return Math.min(
       (this.scale.width * maxViewportCoverage) / source.width,
@@ -258,8 +294,11 @@ export class Match3Scene extends Phaser.Scene {
     );
   }
 
-  private updateGameFailImagePosition(): void {
-    this.gameFailImage?.setPosition(this.scale.width / 2, this.scale.height / 2);
+  private updateGameOutcomeImagePosition(): void {
+    this.gameOutcomeImage?.setPosition(
+      this.scale.width / 2,
+      this.scale.height / 2,
+    );
   }
 
   private updateBoardLayout(moveGems = false): void {
@@ -398,6 +437,7 @@ export class Match3Scene extends Phaser.Scene {
         );
         this.restoreGemDisplay(gemImage);
         const cell: GemCell = {
+          kind: 'gem',
           gemColor: 0,
           gemImage,
           isEmpty: false,
@@ -413,6 +453,47 @@ export class Match3Scene extends Phaser.Scene {
           gemImage.setFrame(cell.gemColor);
         } while (this.isMatch(row, col));
       }
+    }
+
+    this.placeVictoryKeys();
+  }
+
+  private placeVictoryKeys(): void {
+    const availablePositions: Array<{ row: number; col: number }> = [];
+
+    for (let row = 0; row < GAME_CONFIG.fieldSize.height - 1; row += 1) {
+      for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
+        availablePositions.push({ row, col });
+      }
+    }
+
+    if (availablePositions.length < GAME_CONFIG.victoryCondition.keys.length) {
+      throw new Error('The board does not have enough non-bottom key positions.');
+    }
+
+    for (const keyAsset of GAME_CONFIG.victoryCondition.keys) {
+      const positionIndex = Phaser.Math.Between(
+        0,
+        availablePositions.length - 1,
+      );
+      const { row, col } = availablePositions.splice(positionIndex, 1)[0];
+      const replacedGem = this.gameArray[row][col];
+
+      replacedGem.gemImage.setVisible(false);
+      this.poolArray.push(replacedGem.gemImage);
+
+      const keyImage = this.add.image(
+        this.toPixel(col),
+        this.toPixelY(row),
+        keyAsset.textureKey,
+      );
+      this.restoreGemDisplay(keyImage);
+      this.gameArray[row][col] = {
+        kind: 'key',
+        keyId: keyAsset.textureKey,
+        gemImage: keyImage,
+        isEmpty: false,
+      };
     }
   }
 
@@ -452,8 +533,12 @@ export class Match3Scene extends Phaser.Scene {
     return this.cellsShareColor(current, previous, beforePrevious);
   }
 
-  private cellsShareColor(...cells: Array<GemCell | null>): boolean {
-    if (cells.some((cell) => cell === null || cell.isEmpty)) {
+  private cellsShareColor(...cells: Array<BoardCell | null>): boolean {
+    if (
+      cells.some(
+        (cell) => cell === null || cell.isEmpty || cell.kind !== 'gem',
+      )
+    ) {
       return false;
     }
 
@@ -461,7 +546,7 @@ export class Match3Scene extends Phaser.Scene {
     return rest.every((cell) => cell.gemColor === first.gemColor);
   }
 
-  private gemAt(row: number, col: number): GemCell | null {
+  private gemAt(row: number, col: number): BoardCell | null {
     if (
       row < 0 ||
       row >= GAME_CONFIG.fieldSize.height ||
@@ -487,7 +572,7 @@ export class Match3Scene extends Phaser.Scene {
     );
     const pickedGem = this.gemAt(row, col);
 
-    if (pickedGem === null) {
+    if (pickedGem === null || pickedGem.kind !== 'gem') {
       return;
     }
 
@@ -581,10 +666,12 @@ export class Match3Scene extends Phaser.Scene {
     const selectedCol = this.getGemCol(this.selectedGem);
     const pickedGem = this.gemAt(selectedRow + deltaRow, selectedCol + deltaCol);
 
-    if (pickedGem !== null) {
+    if (pickedGem?.kind === 'gem') {
       this.restoreGemDisplay(this.selectedGem.gemImage);
       this.dragging = false;
       this.swapGems(this.selectedGem, pickedGem, true);
+    } else if (pickedGem?.kind === 'key') {
+      this.dragging = false;
     }
   }
 
@@ -593,7 +680,7 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private finishBoardInteraction(): void {
-    if (this.isGameFailed) {
+    if (this.gameOutcome !== 'playing') {
       return;
     }
 
@@ -646,11 +733,13 @@ export class Match3Scene extends Phaser.Scene {
     this.swappingGems = 2;
 
     this.gameArray[gem1Row][gem1Col] = {
+      kind: 'gem',
       gemColor: gem2.gemColor,
       gemImage: gem2.gemImage,
       isEmpty: false,
     };
     this.gameArray[gem2Row][gem2Col] = {
+      kind: 'gem',
       gemColor: gem1.gemColor,
       gemImage: gem1.gemImage,
       isEmpty: false,
@@ -709,7 +798,7 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleMatches(): void {
-    if (this.isGameFailed) {
+    if (this.gameOutcome !== 'playing') {
       return;
     }
 
@@ -749,6 +838,8 @@ export class Match3Scene extends Phaser.Scene {
           previous !== null &&
           !current.isEmpty &&
           !previous.isEmpty &&
+          current.kind === 'gem' &&
+          previous.kind === 'gem' &&
           current.gemColor === previous.gemColor;
 
         if (streakContinues) {
@@ -774,7 +865,7 @@ export class Match3Scene extends Phaser.Scene {
     direction: MatchDirection,
     line: number,
     position: number,
-  ): GemCell | null {
+  ): BoardCell | null {
     return direction === 'horizontal'
       ? this.gemAt(line, position)
       : this.gemAt(position, line);
@@ -802,8 +893,9 @@ export class Match3Scene extends Phaser.Scene {
             this.poolArray.push(cell.gemImage);
 
             if (remaining === 0) {
-              this.makeGemsFall();
-              this.replenishField();
+              this.makeGemsFall(() => {
+                this.collectBottomKeys();
+              });
             }
           },
         });
@@ -811,7 +903,9 @@ export class Match3Scene extends Phaser.Scene {
     }
   }
 
-  private makeGemsFall(): void {
+  private makeGemsFall(onComplete: () => void): void {
+    let remaining = 0;
+
     for (let row = GAME_CONFIG.fieldSize.height - 2; row >= 0; row -= 1) {
       for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         const cell = this.gameArray[row][col];
@@ -825,19 +919,79 @@ export class Match3Scene extends Phaser.Scene {
           continue;
         }
 
+        remaining += 1;
         this.tweens.add({
           targets: cell.gemImage,
           y: cell.gemImage.y + fallTiles * this.gemSize,
           duration: GAME_CONFIG.fallSpeed * fallTiles,
+          onComplete: () => {
+            remaining -= 1;
+            if (remaining === 0) {
+              onComplete();
+            }
+          },
         });
 
-        this.gameArray[row + fallTiles][col] = {
-          gemImage: cell.gemImage,
-          gemColor: cell.gemColor,
-          isEmpty: false,
-        };
+        this.gameArray[row + fallTiles][col] = { ...cell, isEmpty: false };
         cell.isEmpty = true;
       }
+    }
+
+    if (remaining === 0) {
+      onComplete();
+    }
+  }
+
+  private collectBottomKeys(): void {
+    const bottomRow = GAME_CONFIG.fieldSize.height - 1;
+    const landedKeys: KeyCell[] = [];
+
+    for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
+      const cell = this.gameArray[bottomRow][col];
+      if (!cell.isEmpty && cell.kind === 'key') {
+        cell.isEmpty = true;
+        landedKeys.push(cell);
+      }
+    }
+
+    if (landedKeys.length === 0) {
+      this.replenishField();
+      return;
+    }
+
+    this.collectedKeyCount += landedKeys.length;
+    let remaining = landedKeys.length;
+
+    for (const keyCell of landedKeys) {
+      this.tweens.add({
+        targets: keyCell.gemImage,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        duration: GAME_CONFIG.destroySpeed,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          keyCell.gemImage.destroy();
+          remaining -= 1;
+
+          if (remaining !== 0) {
+            return;
+          }
+
+          if (
+            this.collectedKeyCount >=
+            GAME_CONFIG.victoryCondition.keys.length
+          ) {
+            this.triggerGameSuccess();
+          } else {
+            // Removing a key creates a hole at the bottom of its column.
+            // Settle that column again before the top-only replenish pass.
+            this.makeGemsFall(() => {
+              this.collectBottomKeys();
+            });
+          }
+        },
+      });
     }
   }
 
@@ -876,6 +1030,7 @@ export class Match3Scene extends Phaser.Scene {
           GAME_CONFIG.skin.gems.frameCount - 1,
         );
         this.gameArray[row][col] = {
+          kind: 'gem',
           gemColor,
           gemImage,
           isEmpty: false,
@@ -906,7 +1061,9 @@ export class Match3Scene extends Phaser.Scene {
 
             if (this.matchInBoard()) {
               this.time.delayedCall(GAME_CONFIG.cascadeDelay, () => {
-                this.handleMatches();
+                if (this.gameOutcome === 'playing') {
+                  this.handleMatches();
+                }
               });
             } else {
               this.finishBoardInteraction();

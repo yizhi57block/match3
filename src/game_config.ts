@@ -53,13 +53,39 @@ export const GAME_CONFIG = {
       // Phaser texture-cache key and root-relative URL for the failure popup.
       textureKey: 'game-fail',
       imageUrl: '/game_fail.webp',
-      // The popup occupies at most this portion of the narrower viewport axis.
-      maxViewportCoverage: 0.8,
-      // Initial scale, relative to the fitted final popup size.
-      initialScale: 0.1,
-      // Duration, in milliseconds, of the popup's grow-in animation.
-      popDuration: 280,
     },
+  },
+  victoryCondition: {
+    // Each configured key replaces one random gem when the board is created.
+    // Key positions are unique and never use the bottom row.
+    keys: [
+      {
+        textureKey: 'key-1',
+        imageUrl: '/keys/key1.webp',
+      },
+      {
+        textureKey: 'key-2',
+        imageUrl: '/keys/key2.webp',
+      },
+      {
+        textureKey: 'key-3',
+        imageUrl: '/keys/key3.webp',
+      },
+    ],
+    successImage: {
+      // Phaser texture-cache key and root-relative URL for the victory popup.
+      textureKey: 'game-success',
+      imageUrl: '/game_success.webp',
+    },
+  },
+  outcomePopup: {
+    // Both victory and failure popups occupy at most this portion of the
+    // narrower viewport axis, keeping their final size comfortably compact.
+    maxViewportCoverage: 0.62,
+    // Initial scale, relative to the fitted final popup size.
+    initialScale: 0.1,
+    // Duration, in milliseconds, of the shared grow-in animation.
+    popDuration: 280,
   },
   selection: {
     // Whether clicking a gem visually enlarges it while it is selected.
