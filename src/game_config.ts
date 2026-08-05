@@ -128,11 +128,27 @@ export const GAME_CONFIG = {
       // Root-relative URL of the current skin's gem sprite sheet.
       spritesheetUrl: '/sprites/gems.png',
       // Native width, in source pixels, of each sprite-sheet frame.
-      frameWidth: 100,
+      frameWidth: 80,
       // Native height, in source pixels, of each sprite-sheet frame.
-      frameHeight: 100,
+      frameHeight: 80,
       // Number of gem frames from the sprite sheet available to board logic.
-      frameCount: 6,
+      frameCount: 4,
+    },
+    boomEffect: {
+      // Phaser texture-cache key for the gem-destruction burst image.
+      textureKey: 'boom-effect',
+      // Root-relative URL of the burst image shown when a gem is removed.
+      imageUrl: '/boom_effect.png',
+      // Burst size relative to one board cell when the effect begins.
+      initialSizeRatio: 0.8,
+      // Burst size relative to one board cell at its largest point.
+      expandedSizeRatio: 4,
+      // Duration, in milliseconds, of the grow-in and fade-in phase.
+      appearDuration: 120,
+      // Duration, in milliseconds, of the fade-out phase before removal.
+      fadeDuration: 180,
+      // Render depth that keeps the burst above the matched gem images.
+      depth: 2,
     },
   },
   phaser: {

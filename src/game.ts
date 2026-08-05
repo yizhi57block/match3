@@ -31,6 +31,7 @@ export class Match3Scene extends Phaser.Scene {
   private isGameFailed = false;
   private gameFailTimer: Phaser.Time.TimerEvent | null = null;
   private gameFailImage: Phaser.GameObjects.Image | null = null;
+  private boomEffects: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super('Match3');
@@ -55,6 +56,7 @@ export class Match3Scene extends Phaser.Scene {
     this.isGameFailed = false;
     this.gameFailTimer = null;
     this.gameFailImage = null;
+    this.boomEffects = [];
   }
 
   preload(): void {
@@ -84,6 +86,10 @@ export class Match3Scene extends Phaser.Scene {
     this.load.image(
       GAME_CONFIG.failureConditions.failImage.textureKey,
       GAME_CONFIG.failureConditions.failImage.imageUrl,
+    );
+    this.load.image(
+      GAME_CONFIG.skin.boomEffect.textureKey,
+      GAME_CONFIG.skin.boomEffect.imageUrl,
     );
   }
 
@@ -120,6 +126,7 @@ export class Match3Scene extends Phaser.Scene {
       this.gameFailTimer?.remove();
       this.gameFailTimer = null;
       this.gameFailImage = null;
+      this.clearBoomEffects();
       this.gameArray = [];
       this.poolArray = [];
       this.removeMap = [];
@@ -219,6 +226,7 @@ export class Match3Scene extends Phaser.Scene {
     this.clearSelection();
     this.gameFailTimer?.remove();
     this.gameFailTimer = null;
+    this.clearBoomEffects();
     this.tweens.killAll();
     this.playSoundEffect('gameFail');
     this.showGameFailImage();
@@ -791,6 +799,7 @@ export class Match3Scene extends Phaser.Scene {
 
         const cell = this.gameArray[row][col];
         cell.isEmpty = true;
+        this.createBoomEffect(cell.gemImage.x, cell.gemImage.y);
 
         this.tweens.add({
           targets: cell.gemImage,
@@ -809,6 +818,55 @@ export class Match3Scene extends Phaser.Scene {
         });
       }
     }
+  }
+
+  private createBoomEffect(x: number, y: number): void {
+    const { boomEffect } = GAME_CONFIG.skin;
+    const initialSize = this.gemSize * boomEffect.initialSizeRatio;
+    const expandedSize = this.gemSize * boomEffect.expandedSizeRatio;
+    const effect = this.add
+      .image(x, y, boomEffect.textureKey)
+      .setDisplaySize(initialSize, initialSize)
+      .setAlpha(0)
+      .setDepth(boomEffect.depth);
+
+    this.boomEffects.push(effect);
+    this.tweens.chain({
+      targets: effect,
+      tweens: [
+        {
+          displayWidth: expandedSize,
+          displayHeight: expandedSize,
+          alpha: 1,
+          duration: boomEffect.appearDuration,
+          ease: 'Cubic.easeOut',
+        },
+        {
+          alpha: 0,
+          duration: boomEffect.fadeDuration,
+          ease: 'Cubic.easeIn',
+        },
+      ],
+      onComplete: () => {
+        this.disposeBoomEffect(effect);
+      },
+    });
+  }
+
+  private disposeBoomEffect(effect: Phaser.GameObjects.Image): void {
+    const effectIndex = this.boomEffects.indexOf(effect);
+    if (effectIndex >= 0) {
+      this.boomEffects.splice(effectIndex, 1);
+    }
+    effect.destroy();
+  }
+
+  private clearBoomEffects(): void {
+    for (const effect of this.boomEffects) {
+      this.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
+    this.boomEffects = [];
   }
 
   private makeGemsFall(): void {
