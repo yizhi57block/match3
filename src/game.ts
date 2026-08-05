@@ -38,13 +38,15 @@ export class Match3Scene extends Phaser.Scene {
   private boardOriginY = 0;
   private gemSize: number = GAME_CONFIG.layout.maxGemSize;
   private pendingBoardLayout = false;
+  private isBoardResolving = false;
   private wrongMoveCount = 0;
   private gameOutcome: GameOutcome = 'playing';
   private collectedKeyCount = 0;
   private gameFailTimer: Phaser.Time.TimerEvent | null = null;
-  private gameFailImage: Phaser.GameObjects.Image | null = null;
   private boomEffects: Phaser.GameObjects.Image[] = [];
   private gameOutcomeImage: Phaser.GameObjects.Image | null = null;
+  private gameBackgroundImage: Phaser.GameObjects.Image | null = null;
+  private boardBackgroundImage: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super('Match3');
@@ -65,16 +67,26 @@ export class Match3Scene extends Phaser.Scene {
     this.boardOriginY = 0;
     this.gemSize = GAME_CONFIG.layout.maxGemSize;
     this.pendingBoardLayout = false;
+    this.isBoardResolving = false;
     this.wrongMoveCount = 0;
     this.gameOutcome = 'playing';
     this.collectedKeyCount = 0;
     this.gameFailTimer = null;
-    this.gameFailImage = null;
     this.boomEffects = [];
     this.gameOutcomeImage = null;
+    this.gameBackgroundImage = null;
+    this.boardBackgroundImage = null;
   }
 
   preload(): void {
+    this.load.image(
+      GAME_CONFIG.skin.gameBackground.textureKey,
+      GAME_CONFIG.skin.gameBackground.imageUrl,
+    );
+    this.load.image(
+      GAME_CONFIG.skin.boardBackground.textureKey,
+      GAME_CONFIG.skin.boardBackground.imageUrl,
+    );
     this.load.spritesheet(
       GAME_CONFIG.skin.gems.textureKey,
       GAME_CONFIG.skin.gems.spritesheetUrl,
@@ -117,6 +129,7 @@ export class Match3Scene extends Phaser.Scene {
 
   create(): void {
     this.updateBoardLayout();
+    this.createBackgroundImages();
     this.drawField();
     this.createBackgroundMusicControls();
     this.startFailureCountdown();
@@ -147,9 +160,10 @@ export class Match3Scene extends Phaser.Scene {
       this.musicStatusButton = null;
       this.gameFailTimer?.remove();
       this.gameFailTimer = null;
-      this.gameFailImage = null;
       this.clearBoomEffects();
       this.gameOutcomeImage = null;
+      this.gameBackgroundImage = null;
+      this.boardBackgroundImage = null;
       this.gameArray = [];
       this.poolArray = [];
       this.removeMap = [];
@@ -191,7 +205,14 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private handleResize(): void {
+    this.updateGameBackgroundLayout();
+
     if (this.gameOutcome !== 'playing') {
+      if (this.isBoardResolving) {
+        this.pendingBoardLayout = true;
+      } else {
+        this.updateBoardLayout(true);
+      }
       this.updateGameOutcomeImagePosition();
       this.updateMusicStatusButtonPosition();
       return;
@@ -265,12 +286,62 @@ export class Match3Scene extends Phaser.Scene {
   private finishGame(): void {
     this.canPick = false;
     this.dragging = false;
-    this.pendingBoardLayout = false;
     this.clearSelection();
     this.gameFailTimer?.remove();
     this.gameFailTimer = null;
     this.clearBoomEffects();
-    this.tweens.killAll();
+    // Active board tweens must finish so an ended game still settles and
+    // replenishes every empty cell. Outcome guards prevent another match pass.
+  }
+
+  private createBackgroundImages(): void {
+    this.gameBackgroundImage = this.add
+      .image(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        GAME_CONFIG.skin.gameBackground.textureKey,
+      )
+      .setDepth(GAME_CONFIG.skin.gameBackground.depth);
+    this.boardBackgroundImage = this.add
+      .image(
+        this.boardOriginX,
+        this.boardOriginY,
+        GAME_CONFIG.skin.boardBackground.textureKey,
+      )
+      .setDepth(GAME_CONFIG.skin.boardBackground.depth);
+
+    this.updateGameBackgroundLayout();
+    this.updateBoardBackgroundLayout();
+  }
+
+  private updateGameBackgroundLayout(): void {
+    if (this.gameBackgroundImage === null) {
+      return;
+    }
+
+    const source = this.textures
+      .get(GAME_CONFIG.skin.gameBackground.textureKey)
+      .getSourceImage();
+    const coverScale = Math.max(
+      this.scale.width / source.width,
+      this.scale.height / source.height,
+    );
+
+    this.gameBackgroundImage
+      .setPosition(this.scale.width / 2, this.scale.height / 2)
+      .setScale(coverScale);
+  }
+
+  private updateBoardBackgroundLayout(): void {
+    const boardWidth = GAME_CONFIG.fieldSize.width * this.gemSize;
+    const boardHeight = GAME_CONFIG.fieldSize.height * this.gemSize;
+
+    this.boardBackgroundImage
+      ?.setPosition(
+        this.boardOriginX + boardWidth / 2,
+        this.boardOriginY + boardHeight / 2,
+      )
+      .setDisplaySize(boardWidth, boardHeight);
   }
 
   private showGameOutcomeImage(textureKey: string): void {
@@ -326,6 +397,7 @@ export class Match3Scene extends Phaser.Scene {
       GAME_CONFIG.fieldSize.height * this.gemSize,
       this.scale.height,
     );
+    this.updateBoardBackgroundLayout();
 
     if (!moveGems || this.gameArray.length === 0) {
       return;
@@ -691,11 +763,12 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private finishBoardInteraction(): void {
-    if (this.gameOutcome !== 'playing') {
-      return;
+    this.isBoardResolving = false;
+
+    if (this.gameOutcome === 'playing') {
+      this.canPick = true;
     }
 
-    this.canPick = true;
     this.clearSelection();
 
     if (!this.pendingBoardLayout) {
@@ -741,6 +814,7 @@ export class Match3Scene extends Phaser.Scene {
     const gem2Col = this.getGemCol(gem2);
 
     this.canPick = false;
+    this.isBoardResolving = true;
     this.swappingGems = 2;
 
     this.gameArray[gem1Row][gem1Col] = {
@@ -780,8 +854,14 @@ export class Match3Scene extends Phaser.Scene {
           return;
         }
 
+        if (this.gameOutcome !== 'playing') {
+          this.finishBoardInteraction();
+          return;
+        }
+
         if (!this.matchInBoard() && swapBack) {
           if (this.registerWrongMove()) {
+            this.finishBoardInteraction();
             return;
           }
 
@@ -1044,13 +1124,14 @@ export class Match3Scene extends Phaser.Scene {
             GAME_CONFIG.victoryCondition.keys.length
           ) {
             this.triggerGameSuccess();
-          } else {
-            // Removing a key creates a hole at the bottom of its column.
-            // Settle that column again before the top-only replenish pass.
-            this.makeGemsFall(() => {
-              this.collectBottomKeys();
-            });
           }
+
+          // Removing a key creates a hole at the bottom of its column. Even
+          // after the outcome is decided, settle and replenish the board; the
+          // ended state prevents the completed board from cascading again.
+          this.makeGemsFall(() => {
+            this.collectBottomKeys();
+          });
         },
       });
     }
@@ -1120,7 +1201,7 @@ export class Match3Scene extends Phaser.Scene {
               return;
             }
 
-            if (this.matchInBoard()) {
+            if (this.gameOutcome === 'playing' && this.matchInBoard()) {
               this.time.delayedCall(GAME_CONFIG.cascadeDelay, () => {
                 if (this.gameOutcome === 'playing') {
                   this.handleMatches();

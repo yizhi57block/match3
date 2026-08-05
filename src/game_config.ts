@@ -81,7 +81,7 @@ export const GAME_CONFIG = {
   outcomePopup: {
     // Both victory and failure popups occupy at most this portion of the
     // narrower viewport axis, keeping their final size comfortably compact.
-    maxViewportCoverage: 0.62,
+    maxViewportCoverage: 0.4,
     // Initial scale, relative to the fitted final popup size.
     initialScale: 0.1,
     // Duration, in milliseconds, of the shared grow-in animation.
@@ -148,6 +148,22 @@ export const GAME_CONFIG = {
   skin: {
     // Page, canvas, and exposed board-margin color for the current skin.
     backgroundColor: '#000000',
+    gameBackground: {
+      // Phaser texture-cache key for the full-screen game background.
+      textureKey: 'game-background',
+      // Root-relative URL of the centered, cover-scaled background image.
+      imageUrl: '/background.webp',
+      // Render behind the board background and every gameplay object.
+      depth: -20,
+    },
+    boardBackground: {
+      // Phaser texture-cache key for the image beneath the gem grid.
+      textureKey: 'board-background',
+      // Root-relative URL of the image stretched to the exact board bounds.
+      imageUrl: '/board.webp',
+      // Render above the game background but below gems.
+      depth: -10,
+    },
     gems: {
       // Phaser texture-cache key used by all gem images.
       textureKey: 'gems',
