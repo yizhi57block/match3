@@ -25,11 +25,11 @@ export const GAME_CONFIG = {
   },
   layout: {
     // Largest visual size of a board cell. Desktop layouts retain this size.
-    maxGemSize: 100,
-    // Smallest comfortable touch target. This still fits a 6-column board on
-    // a 320px-wide device when selection overflow and gutters are included.
+    maxGemSize: 90,
+    // Smallest comfortable touch target. A 6-column framed board still fits
+    // within a 320px-wide device, though it eats into the padding below.
     minGemSize: 48,
-    // Space left around the enlarged boundary gems, in logical pixels.
+    // Space left around the framed board edge, in logical pixels.
     horizontalPadding: 12,
     verticalPadding: 24,
   },
@@ -159,16 +159,30 @@ export const GAME_CONFIG = {
     boardBackground: {
       // Phaser texture-cache key for the image beneath the gem grid.
       textureKey: 'board-background',
-      // Root-relative URL of the image stretched to the exact board bounds.
+      // Root-relative URL of the image fitted around the board bounds.
       imageUrl: '/board.webp',
       // Render above the game background but below gems.
       depth: -10,
+      // Portion of each source-image edge taken up by the decorative frame.
+      // Only the region inside these insets holds the cell panels, so the
+      // board is sized by that region instead of the full artwork. Measured
+      // from the 562x754 artwork: the panel grid spans x 25..535.5 and
+      // y 29.9..728.1.
+      playfieldInset: {
+        left: 25 / 562,
+        right: 26.5 / 562,
+        top: 29.9 / 754,
+        bottom: 25.9 / 754,
+      },
     },
     gems: {
       // Phaser texture-cache key used by all gem images.
       textureKey: 'gems',
       // Root-relative URL of the current skin's gem sprite sheet.
       spritesheetUrl: '/sprites/gems.png',
+      // Gem display size relative to one board cell. A little inset keeps the
+      // artwork aligned with the visible panel beneath each board position.
+      displayScale: 0.9,
       // Native width, in source pixels, of each sprite-sheet frame.
       frameWidth: 80,
       // Native height, in source pixels, of each sprite-sheet frame.

@@ -333,15 +333,28 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private updateBoardBackgroundLayout(): void {
+    if (this.boardBackgroundImage === null) {
+      return;
+    }
+
+    const inset = GAME_CONFIG.skin.boardBackground.playfieldInset;
     const boardWidth = GAME_CONFIG.fieldSize.width * this.gemSize;
     const boardHeight = GAME_CONFIG.fieldSize.height * this.gemSize;
+    // Scale the artwork so its cell panels, rather than its outer edge, cover
+    // the gem grid. The decorative frame then falls outside the board bounds.
+    const displayWidth = boardWidth / (1 - inset.left - inset.right);
+    const displayHeight = boardHeight / (1 - inset.top - inset.bottom);
 
     this.boardBackgroundImage
-      ?.setPosition(
-        this.boardOriginX + boardWidth / 2,
-        this.boardOriginY + boardHeight / 2,
+      .setPosition(
+        this.boardOriginX +
+          boardWidth / 2 +
+          (displayWidth * (inset.right - inset.left)) / 2,
+        this.boardOriginY +
+          boardHeight / 2 +
+          (displayHeight * (inset.bottom - inset.top)) / 2,
       )
-      .setDisplaySize(boardWidth, boardHeight);
+      .setDisplaySize(displayWidth, displayHeight);
   }
 
   private showGameOutcomeImage(textureKey: string): void {
@@ -407,7 +420,7 @@ export class Match3Scene extends Phaser.Scene {
       for (let col = 0; col < GAME_CONFIG.fieldSize.width; col += 1) {
         const cell = this.gameArray[row][col];
         cell.gemImage.setPosition(this.toPixel(col), this.toPixelY(row));
-        this.restoreGemDisplay(cell.gemImage);
+        this.restoreCellDisplay(cell);
       }
     }
 
@@ -418,9 +431,11 @@ export class Match3Scene extends Phaser.Scene {
 
   private resolveGemSize(): number {
     const { fieldSize, layout, selection } = GAME_CONFIG;
-    const selectionOverflow = selection.enlargeOnSelect
-      ? Math.max(selection.scale - 1, 0)
-      : 0;
+    const inset = GAME_CONFIG.skin.boardBackground.playfieldInset;
+    const selectedGemScale =
+      GAME_CONFIG.skin.gems.displayScale *
+      (selection.enlargeOnSelect ? selection.scale : 1);
+    const selectionOverflow = Math.max(selectedGemScale - 1, 0);
     const availableWidth = Math.max(
       0,
       this.scale.width - layout.horizontalPadding * 2,
@@ -429,10 +444,18 @@ export class Match3Scene extends Phaser.Scene {
       0,
       this.scale.height - layout.verticalPadding * 2,
     );
-    const widthLimitedSize =
-      availableWidth / (fieldSize.width + selectionOverflow);
-    const heightLimitedSize =
-      availableHeight / (fieldSize.height + selectionOverflow);
+    // The visible board is the wider of the framed background and the grid
+    // plus the overflow of an enlarged selected gem, both measured in cells.
+    const widthInCells = Math.max(
+      fieldSize.width / (1 - inset.left - inset.right),
+      fieldSize.width + selectionOverflow,
+    );
+    const heightInCells = Math.max(
+      fieldSize.height / (1 - inset.top - inset.bottom),
+      fieldSize.height + selectionOverflow,
+    );
+    const widthLimitedSize = availableWidth / widthInCells;
+    const heightLimitedSize = availableHeight / heightInCells;
 
     return Phaser.Math.Clamp(
       Math.min(widthLimitedSize, heightLimitedSize),
@@ -570,7 +593,7 @@ export class Match3Scene extends Phaser.Scene {
         this.toPixelY(row),
         keyAsset.textureKey,
       );
-      this.restoreGemDisplay(keyImage);
+      this.restoreKeyDisplay(keyImage);
       this.gameArray[row][col] = {
         kind: 'key',
         keyId: keyAsset.textureKey,
@@ -689,8 +712,8 @@ export class Match3Scene extends Phaser.Scene {
 
     gem.gemImage
       .setDisplaySize(
-        this.gemSize * selectionScale,
-        this.gemSize * selectionScale,
+        this.getGemDisplaySize() * selectionScale,
+        this.getGemDisplaySize() * selectionScale,
       )
       .setDepth(GAME_CONFIG.selection.depth);
     this.selectedGem = gem;
@@ -704,9 +727,28 @@ export class Match3Scene extends Phaser.Scene {
   }
 
   private restoreGemDisplay(gemImage: Phaser.GameObjects.Image): void {
+    const displaySize = this.getGemDisplaySize();
+
     gemImage
-      .setDisplaySize(this.gemSize, this.gemSize)
+      .setDisplaySize(displaySize, displaySize)
       .setDepth(0);
+  }
+
+  private getGemDisplaySize(): number {
+    return this.gemSize * GAME_CONFIG.skin.gems.displayScale;
+  }
+
+  private restoreKeyDisplay(keyImage: Phaser.GameObjects.Image): void {
+    keyImage.setDisplaySize(this.gemSize, this.gemSize).setDepth(0);
+  }
+
+  private restoreCellDisplay(cell: BoardCell): void {
+    if (cell.kind === 'gem') {
+      this.restoreGemDisplay(cell.gemImage);
+      return;
+    }
+
+    this.restoreKeyDisplay(cell.gemImage);
   }
 
   private startSwipe(pointer: Phaser.Input.Pointer): void {
