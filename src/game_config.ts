@@ -202,7 +202,13 @@ export const GAME_CONFIG = {
       promptTextureKey: 'scene1-collect-them',
       promptImageUrl: '/scene1/images/collect-them.webp',
       // Collect them 提示相对展示台高度的比例。
-      promptHeightRatio: 0.54,
+      promptHeightRatio: 0.38,
+      // 提示铭牌填充色（原创 Phaser 图形），提升深色文字对比度。
+      promptPanelFillColor: 0xffefd2,
+      // 提示铭牌描边色。
+      promptPanelStrokeColor: 0xb56a31,
+      // 提示铭牌不透明度。
+      promptPanelAlpha: 0.94,
       checkTextureKey: 'scene1-check',
       checkImageUrl: '/scene1/images/check.png',
       // 已收集勾选标记相对展示台高度的比例。

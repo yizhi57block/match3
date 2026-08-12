@@ -63,6 +63,7 @@ export class Match3Scene extends Phaser.Scene {
   private lifePanel: Phaser.GameObjects.Image | null = null;
   private lifeIcons: Phaser.GameObjects.Image[] = [];
   private keyStand: Phaser.GameObjects.Image | null = null;
+  private collectPromptBackdrop: Phaser.GameObjects.Rectangle | null = null;
   private collectPrompt: Phaser.GameObjects.Image | null = null;
   private trophyDisplays = new Map<string, TrophyDisplay>();
   private catTree: Phaser.GameObjects.Image | null = null;
@@ -128,6 +129,7 @@ export class Match3Scene extends Phaser.Scene {
     this.lifePanel = null;
     this.lifeIcons = [];
     this.keyStand = null;
+    this.collectPromptBackdrop = null;
     this.collectPrompt = null;
     this.trophyDisplays = new Map<string, TrophyDisplay>();
     this.catTree = null;
@@ -296,9 +298,20 @@ export class Match3Scene extends Phaser.Scene {
     this.keyStand = this.add
       .image(0, 0, targets.standTextureKey)
       .setDepth(uiDepth);
+    this.collectPromptBackdrop = this.add
+      .rectangle(
+        0,
+        0,
+        120,
+        48,
+        targets.promptPanelFillColor,
+        targets.promptPanelAlpha,
+      )
+      .setStrokeStyle(2, targets.promptPanelStrokeColor, 1)
+      .setDepth(uiDepth + 1);
     this.collectPrompt = this.add
       .image(0, 0, targets.promptTextureKey)
-      .setDepth(uiDepth + 1);
+      .setDepth(uiDepth + 2);
 
     for (const keyAsset of GAME_CONFIG.victoryCondition.keys) {
       const item = this.add
@@ -552,6 +565,15 @@ export class Match3Scene extends Phaser.Scene {
     if (this.selectedGem !== null) {
       this.selectGem(this.selectedGem);
     }
+
+    if (
+      this.hintHand?.visible &&
+      !this.hasMadeFirstBoardMove &&
+      this.canPick
+    ) {
+      this.tweens.killTweensOf(this.hintHand);
+      this.showHint();
+    }
   }
 
   private updateBackgroundCover(): void {
@@ -646,10 +668,22 @@ export class Match3Scene extends Phaser.Scene {
 
     const promptHeight = standHeight * targets.promptHeightRatio;
     this.fitImage(this.collectPrompt, promptHeight * 1.8, promptHeight);
-    this.collectPrompt?.setPosition(
-      standX - standWidth * 0.36,
-      standY - standHeight * 0.56,
-    );
+    const promptWidth = (this.collectPrompt?.displayWidth ?? 80) + 24;
+    const promptPanelHeight = (this.collectPrompt?.displayHeight ?? 36) + 16;
+    const standTop = standY - standHeight / 2;
+    const promptX = this.compactLayout
+      ? standX
+      : Math.max(
+          GAME_CONFIG.layout.outerMargin + promptWidth / 2,
+          standX - standWidth / 2 - promptWidth / 2 - 8,
+        );
+    const promptY = this.compactLayout
+      ? boardBottom + Math.max(18, (standTop - boardBottom) / 2)
+      : standY;
+    this.collectPromptBackdrop
+      ?.setPosition(promptX, promptY)
+      .setDisplaySize(promptWidth, promptPanelHeight);
+    this.collectPrompt?.setPosition(promptX, promptY);
 
     const slotOffsets = [-0.305, 0, 0.305];
     GAME_CONFIG.victoryCondition.keys.forEach((keyAsset, index) => {
