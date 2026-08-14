@@ -13,8 +13,11 @@ body {
 
 #app {
   position: fixed;
-  inset: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* The Phaser RESIZE parent must cover the complete viewport. Safe-area
+     spacing is applied by the scene's configurable UI margins instead. */
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
 }
 
 canvas {

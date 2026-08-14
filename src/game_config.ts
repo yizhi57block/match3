@@ -202,7 +202,15 @@ export const GAME_CONFIG = {
       promptTextureKey: 'scene1-collect-them',
       promptImageUrl: '/scene1/images/collect-them.webp',
       // Collect them 提示相对展示台高度的比例。
-      promptHeightRatio: 0.54,
+      promptHeightRatio: 0.38,
+      // 桌面端提示相对展示台左缘向右的视觉校正比例；展示台纹理带透明边缘。
+      promptDesktopShiftRatio: 0.058,
+      // 提示铭牌填充色（原创 Phaser 图形），提升深色文字对比度。
+      promptPanelFillColor: 0xffefd2,
+      // 提示铭牌描边色。
+      promptPanelStrokeColor: 0xb56a31,
+      // 提示铭牌不透明度。
+      promptPanelAlpha: 0.94,
       checkTextureKey: 'scene1-check',
       checkImageUrl: '/scene1/images/check.png',
       // 已收集勾选标记相对展示台高度的比例。
@@ -257,6 +265,8 @@ export const GAME_CONFIG = {
       fontFamily: 'Georgia, serif',
       // 桌面分数最大字号。
       maxFontSize: 22,
+      // 分数在生命面板内的垂直锚点，避开面板下沿和棋盘边框。
+      panelYRatio: 0.3,
     },
     combo: {
       // 连击文字颜色（原创 Phaser Text）。
