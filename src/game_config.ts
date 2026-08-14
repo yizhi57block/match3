@@ -29,9 +29,57 @@ export const GAME_CONFIG = {
     // Smallest comfortable touch target. This still fits a 6-column board on
     // a 320px-wide device when selection overflow and gutters are included.
     minGemSize: 48,
-    // Space left around the enlarged boundary gems, in logical pixels.
+    // Space left around the board's outer frame, in logical pixels. The gem
+    // size budget subtracts these gutters *and* the board frame border, so the
+    // decorated frame is never clipped by the viewport edges.
     horizontalPadding: 12,
     verticalPadding: 24,
+  },
+  // Render order for every layer. Lower values draw further back. Side
+  // decorations stay behind the board frame so they can never occlude a cell.
+  depths: {
+    // 全屏背景图，始终位于最底层
+    sceneBackground: -40,
+    // 后层装饰（猫爬架、展示台长凳）
+    backDecoration: -30,
+    // 前层装饰（猫咪、已收集道具），压在后层装饰之上但仍在棋盘之下
+    frontDecoration: -20,
+    // 棋盘外框图，永远盖住任何装饰物
+    boardFrame: -10,
+    // 棋盘宝石
+    gem: 0,
+    // 常驻 UI（BGM 开关等）
+    ui: 2,
+    // 胜负结算弹窗
+    outcomePopup: 10,
+  },
+  // Placement rules for the scene decorations that flank the board.
+  decorations: {
+    // 装饰物与画布边缘之间的留白（逻辑像素）
+    screenMargin: 16,
+    // 装饰物与棋盘外框之间的最小间隔（逻辑像素）
+    boardGap: 16,
+    // 棋盘两侧留白窄于该值时，改用棋盘上/下方的紧凑布局
+    minSideBandWidth: 200,
+    // 装饰物相对原始尺寸的最小缩放。低于该值直接隐藏，避免糊成小色块
+    minScale: 0.24,
+    // 猫咪站台在猫爬架显示高度上的位置比例（0=顶部，1=底部）
+    catPerchRatio: 0.66,
+    // 猫咪显示高度相对猫爬架显示高度的比例
+    catHeightRatio: 0.116,
+    // 紧凑布局下猫咪的显示高度上限（逻辑像素）
+    catCompactMaxHeight: 132,
+    keyIcons: {
+      // 道具图标显示宽度相对展示台显示宽度的比例
+      widthRatio: 0.22,
+      // 图标落点在展示台显示高度上的位置比例（自台面顶部向下）
+      surfaceRatio: 0.42,
+      // 相邻图标中心间距相对展示台显示宽度的比例
+      spacingRatio: 0.27,
+      // 收集时的弹出动画时长（毫秒）与起始缩放比例
+      popDuration: 300,
+      popFromScale: 0.55,
+    },
   },
   // Duration, in milliseconds, of an adjacent-gem swap.
   swapSpeed: 200,
@@ -51,31 +99,37 @@ export const GAME_CONFIG = {
     countdownSeconds: 0,
     failImage: {
       // Phaser texture-cache key and root-relative URL for the failure popup.
+      // Scene1: 游戏失败画面
       textureKey: 'game-fail',
-      imageUrl: '/game_fail.webp',
+      imageUrl: '/scene1/ui/game_fail.webp',
     },
   },
   victoryCondition: {
     // Each configured key replaces one random gem when the board is created.
     // Key positions are unique and never use the bottom row.
+    // Scene1: 猫咪喜欢的三个道具
     keys: [
       {
-        textureKey: 'key-1',
-        imageUrl: '/keys/key1.webp',
+        textureKey: 'key-mouse',
+        imageUrl: '/scene1/keys/key_mouse.webp',
+        name: '老鼠玩具',
       },
       {
-        textureKey: 'key-2',
-        imageUrl: '/keys/key2.webp',
+        textureKey: 'key-bowl',
+        imageUrl: '/scene1/keys/key_bowl.webp',
+        name: '猫碗',
       },
       {
-        textureKey: 'key-3',
-        imageUrl: '/keys/key3.webp',
+        textureKey: 'key-fish',
+        imageUrl: '/scene1/keys/key_fish.webp',
+        name: '小鱼',
       },
     ],
     successImage: {
       // Phaser texture-cache key and root-relative URL for the victory popup.
+      // Scene1: 游戏胜利画面
       textureKey: 'game-success',
-      imageUrl: '/game_success.webp',
+      imageUrl: '/scene1/ui/game_success.webp',
     },
   },
   outcomePopup: {
@@ -99,66 +153,119 @@ export const GAME_CONFIG = {
     // Phaser audio-cache key used by the background music instance.
     textureKey: 'background-music',
     // Root-relative URL of the looping background music track.
-    audioUrl: '/bg_music.mp3',
+    // Scene1: 35秒循环背景音乐
+    audioUrl: '/scene1/audio/bgm.mp3',
     // Root-relative image shown while background music is playing.
-    playingImageUrl: '/video_on.png',
+    playingImageUrl: '/scene1/ui/sound_on.png',
     // Root-relative image shown while background music is paused or stopped.
-    pausedImageUrl: '/video_off.png',
+    pausedImageUrl: '/scene1/ui/sound_off.png',
     // Start the music from the first click or tap anywhere in the game.
     startOnFirstPointerDown: true,
     // Per-track volume, from 0 (silent) through 1 (full volume).
-    volume: 0.4,
+    volume: 0.3,
     // Logical display size of the music-status button in game pixels.
-    buttonSize: 48,
+    buttonSize: 56,
     // Distance between the button and the top/right canvas edges.
-    buttonMargin: 12,
+    buttonMargin: 16,
   },
   soundEffects: {
     click: {
       // Played once when a player selects a gem.
+      // Scene1: 宝石点击音效
       textureKey: 'gem-click',
-      audioUrl: '/click.mp3',
-      volume: 0.7,
+      audioUrl: '/scene1/audio/click.mp3',
+      volume: 0.6,
+    },
+    swap: {
+      // Played when gems are swapped.
+      // Scene1: 移动宝石音效
+      textureKey: 'gem-swap',
+      audioUrl: '/scene1/audio/swap.mp3',
+      volume: 0.5,
     },
     match3: {
       // Played for a three-gem removal.
+      // Scene1: 三消音效
       textureKey: 'match-3',
-      audioUrl: '/match3.mp3',
-      volume: 0.8,
+      audioUrl: '/scene1/audio/match1.mp3',
+      volume: 0.7,
     },
     match4: {
       // Played when four or more gems are removed in one resolution.
+      // Scene1: 四消及以上音效
       textureKey: 'match-4',
-      audioUrl: '/match4.mp3',
+      audioUrl: '/scene1/audio/match3.mp3',
       volume: 0.8,
     },
     noBreak: {
       // Played when an attempted swap does not create a match.
+      // Scene1: 无效交换音效（使用pop音效）
       textureKey: 'no-break',
-      audioUrl: '/no_break.mp3',
-      volume: 0.7,
+      audioUrl: '/scene1/audio/pop.mp3',
+      volume: 0.5,
     },
     gameFail: {
       // Played once when any configured failure condition is reached.
+      // Scene1: 游戏失败音效
       textureKey: 'game-fail',
-      audioUrl: '/game_fail.mp3',
-      volume: 0.9,
+      audioUrl: '/scene1/audio/game_fail.mp3',
+      volume: 0.8,
+    },
+    victory: {
+      // Played when the game is won.
+      // Scene1: 喵咪舒服的叫声
+      textureKey: 'game-victory',
+      audioUrl: '/scene1/audio/victory.mp3',
+      volume: 0.7,
+    },
+    applause: {
+      // Celebratory sound for victory.
+      // Scene1: 鼓掌声
+      textureKey: 'applause',
+      audioUrl: '/scene1/audio/applause.mp3',
+      volume: 0.6,
+    },
+    keyCollect: {
+      // Played when collecting a key item.
+      // Scene1: 收集关键道具音效
+      textureKey: 'key-collect',
+      audioUrl: '/scene1/audio/match2.mp3',
+      volume: 0.7,
     },
   },
   skin: {
     // Page, canvas, and exposed board-margin color for the current skin.
-    backgroundColor: '#000000',
+    // Scene1: 温馨室内场景，猫咪主题
+    backgroundColor: '#f4e4d7',
+    // 全屏背景图片
+    background: {
+      textureKey: 'scene-background',
+      imageUrl: '/scene1/bg/background.webp',
+    },
+    // 棋盘背景图片（带边框）
+    board: {
+      textureKey: 'game-board',
+      imageUrl: '/scene1/bg/board.webp',
+      // 棋盘图片的实际可用区域（去除边框后）
+      padding: {
+        top: 45,
+        right: 28,
+        bottom: 45,
+        left: 28,
+      },
+    },
     gems: {
       // Phaser texture-cache key used by all gem images.
       textureKey: 'gems',
       // Root-relative URL of the current skin's gem sprite sheet.
-      spritesheetUrl: '/sprites/gems.png',
+      spritesheetUrl: '/scene1/gems/gems.png',
       // Native width, in source pixels, of each sprite-sheet frame.
       frameWidth: 100,
       // Native height, in source pixels, of each sprite-sheet frame.
       frameHeight: 100,
       // Number of gem frames from the sprite sheet available to board logic.
-      frameCount: 6,
+      // Scene1 有4种宝石：紫色钻石、橘黄棱形、粉红桃心、绿色多面体
+      frameCount: 4,
     },
   },
   phaser: {
